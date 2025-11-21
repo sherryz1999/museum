@@ -1,13 +1,11 @@
-// Updated src/main.js
-// Changes: use full CDN module URLs for browser imports, set texture loader CORS hints,
-// and minor robustness improvements (null checks for modal elements).
+// src/main.js
+// Browser-friendly imports (use full CDN URLs so the browser can resolve modules)
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
 
 const canvasContainer = document.body;
 
 // --- Configuration ---
-// Your YouTube video ID
 const YOUTUBE_VIDEO_ID = 'FXTDo0TEp6Q';
 
 // Room size
@@ -101,11 +99,10 @@ scene.add(rightWall);
 
 // --- Picture frame with YouTube thumbnail ---
 const loader = new THREE.TextureLoader();
-// hint the browser we want CORS (may help in some environments)
+// try to hint crossOrigin for thumbnails (may or may not help depending on host)
 if (typeof loader.setCrossOrigin === 'function') {
   try { loader.setCrossOrigin('anonymous'); } catch (e) {}
 }
-// also set property fallback
 loader.crossOrigin = 'anonymous';
 
 function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '', title = '' }) {
@@ -135,14 +132,12 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
     loader.load(
       thumbUrl,
       (tex) => {
-        // use an emissive-like basic material so thumbnail looks true-to-source
         plane.material = new THREE.MeshBasicMaterial({ map: tex });
         plane.material.needsUpdate = true;
       },
       undefined,
-      (err) => {
+      () => {
         // keep placeholder if thumbnail fails to load (CORS or network)
-        // console.debug('Thumbnail load failed', err);
       }
     );
   }
@@ -205,7 +200,6 @@ function openVideoModal(videoId) {
     modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
   } else {
-    // fallback: open direct YouTube link in new tab
     window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank', 'noopener');
   }
 }
@@ -253,7 +247,7 @@ function animate() {
 }
 animate();
 
-// --- Helper: show a friendly console message if the video id wasn't replaced ---
+// --- Helper ---
 if (!YOUTUBE_VIDEO_ID || YOUTUBE_VIDEO_ID === 'REPLACE_WITH_VIDEO_ID') {
   console.warn('No YouTube video ID configured. Open src/main.js and set YOUTUBE_VIDEO_ID to your video ID.');
 }
