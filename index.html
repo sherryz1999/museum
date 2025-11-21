@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Virtual Museum — Violin Performance</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="ui">
+    <div id="hint">Click the framed video to view the performance</div>
+  </div>
+
+  <!-- Three.js canvas will be appended by the script -->
+  <!-- Modal for YouTube embed -->
+  <div id="video-modal" aria-hidden="true">
+    <div id="video-container">
+      <button id="close-btn" aria-label="Close video">✕</button>
+      <iframe id="yt-iframe" src="" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
