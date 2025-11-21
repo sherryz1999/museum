@@ -1,11 +1,13 @@
+// Updated src/main.js
+// Changes: use full CDN module URLs for browser imports, set texture loader CORS hints,
+// and minor robustness improvements (null checks for modal elements).
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
 
 const canvasContainer = document.body;
 
 // --- Configuration ---
-// Replace the value below with your YouTube video ID (the part after "v=" in a URL).
-// Example: for https://www.youtube.com/watch?v=abc123, the ID is "abc123".
+// Your YouTube video ID
 const YOUTUBE_VIDEO_ID = 'FXTDo0TEp6Q';
 
 // Room size
@@ -99,6 +101,12 @@ scene.add(rightWall);
 
 // --- Picture frame with YouTube thumbnail ---
 const loader = new THREE.TextureLoader();
+// hint the browser we want CORS (may help in some environments)
+if (typeof loader.setCrossOrigin === 'function') {
+  try { loader.setCrossOrigin('anonymous'); } catch (e) {}
+}
+// also set property fallback
+loader.crossOrigin = 'anonymous';
 
 function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '', title = '' }) {
   const frameWidth = 3.2;
@@ -123,15 +131,18 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
   plane.castShadow = true;
   scene.add(plane);
 
-  if (videoId) {
+  if (videoId && thumbUrl) {
     loader.load(
       thumbUrl,
       (tex) => {
+        // use an emissive-like basic material so thumbnail looks true-to-source
         plane.material = new THREE.MeshBasicMaterial({ map: tex });
+        plane.material.needsUpdate = true;
       },
       undefined,
-      () => {
-        // ignore errors; keep placeholder
+      (err) => {
+        // keep placeholder if thumbnail fails to load (CORS or network)
+        // console.debug('Thumbnail load failed', err);
       }
     );
   }
@@ -189,19 +200,26 @@ const iframe = document.getElementById('yt-iframe');
 const closeBtn = document.getElementById('close-btn');
 
 function openVideoModal(videoId) {
-  iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
-  modal.setAttribute('aria-hidden', 'false');
-  document.body.style.overflow = 'hidden';
+  if (iframe && modal) {
+    iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  } else {
+    // fallback: open direct YouTube link in new tab
+    window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank', 'noopener');
+  }
 }
 
 function closeVideoModal() {
-  iframe.src = '';
-  modal.setAttribute('aria-hidden', 'true');
-  document.body.style.overflow = '';
+  if (iframe && modal) {
+    iframe.src = '';
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
 }
 
-closeBtn.addEventListener('click', closeVideoModal);
-modal.addEventListener('click', (e) => {
+if (closeBtn) closeBtn.addEventListener('click', closeVideoModal);
+if (modal) modal.addEventListener('click', (e) => {
   if (e.target === modal) closeVideoModal();
 });
 
@@ -221,7 +239,6 @@ const clock = new THREE.Clock();
 
 function animate() {
   requestAnimationFrame(animate);
-  const dt = clock.getDelta();
   controls.update();
 
   // subtle float for frames (stylistic)
