@@ -13,10 +13,15 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Virtual Museum — Violin Performance</title>
   <link rel="stylesheet" href="styles.css" />
+  <!-- Small helper for browsers that don't run modules via file:// -->
+  <meta name="robots" content="noindex">
 </head>
 <body>
   <div id="ui">
     <div id="hint">Click the framed video to view the performance</div>
+    <div id="quick-actions" style="margin-top:8px;">
+      <button id="open-youtube" title="Open video in YouTube">Open video (YouTube)</button>
+    </div>
   </div>
 
   <!-- Three.js canvas will be appended by the script -->
@@ -28,6 +33,19 @@
     </div>
   </div>
 
+  <noscript>
+    <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#111;color:#fff;">
+      JavaScript is required to view this scene. Serve over HTTP and enable scripts.
+    </div>
+  </noscript>
+
   <script type="module" src="src/main.js"></script>
+
+  <script>
+    // small convenience: open youtube link (same id used in src/main.js)
+    document.getElementById('open-youtube').addEventListener('click', () => {
+      window.open('https://www.youtube.com/watch?v=FXTDo0TEp6Q', '_blank', 'noopener');
+    });
+  </script>
 </body>
 </html>
