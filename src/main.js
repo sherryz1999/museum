@@ -207,14 +207,14 @@ if (portraitCount > 0) {
   const portraitFrameDepth = 0.06;
 
   // X coordinate just in front of left wall with GAP_WORLD_UNITS offset
-  const leftX = -ROOM.depth / 2 + GAP_WORLD_UNITS + portraitFrameDepth / 2;
+  const leftX = -ROOM.width / 2 + padding + portraitFrameDepth / 2;
 
   // Y set to wall middle
   const portraitY = ROOM.height / 2;
 
   for (let i = 0; i < portraitCount; i++) {
     const file = PORTRAIT_FILES[i];
-    const z = -ROOM.depth / 2 + padding + segment * i;
+    const z = -ROOM.depth / 2 + GAP_WORLD_UNITS + segment * i;
     const imageUrl = new URL(file, window.location.href).href;
 
     const mesh = createFrame({
