@@ -1,13 +1,9 @@
 // src/main.js
-// Fix: ensure the Google Slides iframe is constrained to the left frame (no full-screen takeover).
-// Strategy:
-// - Render iframes via CSS3DRenderer inside a container <div> that controls pixel size.
-// - Make the CSS3DRenderer canvas ignore pointer events (so only the container receives them).
-// - Update container sizes on resize so the iframe stays the correct size.
-// - Keep slides/embed URL easy to swap via SLIDES_EMBED_URL.
-//
-// Replace your existing src/main.js with this file (or just the createFrame / CSS3D parts).
-// Make sure your Slides are "Published to the web" (File → Publish to the web → Embed) or embeddable.
+// Fixes for CSS3D iframe sizing so Google Slides stays within the left frame.
+// - Adds a small visual debug border on the iframe container (toggle DEBUG_FRAME_BORDER).
+// - Constrains iframe pixel footprint via pxW/pxH and clamps pixelsPerUnit to avoid full-screen growth.
+// - Ensures cssRenderer container ignores pointer events while the iframe container receives them.
+// - Keeps SLIDES_EMBED_URL easy to swap.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -19,9 +15,10 @@ const canvasContainer = document.body;
 const YOUTUBE_VIDEO_ID = 'FXTDo0TEp6Q';
 
 // Use the published/embed URL from Google Slides (recommended).
-// Example embed URL:
-// https://docs.google.com/presentation/d/1wQomrf_cSdXAveNj1rNkl9fo3GOgK_dN/embed?start=false&loop=false&delayms=3000
 const SLIDES_EMBED_URL = 'https://docs.google.com/presentation/d/1wQomrf_cSdXAveNj1rNkl9fo3GOgK_dN/embed?start=false&loop=false&delayms=3000';
+
+// Toggle a visible border to confirm iframe container placement (set to false to hide)
+const DEBUG_FRAME_BORDER = true;
 
 const ROOM = { width: 12, height: 4, depth: 8 };
 
@@ -33,13 +30,13 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 // --- CSS3D renderer for iframes ---
-// IMPORTANT: make the CSS3D renderer ignore pointer events at the container level so
-// only the iframe's own element receives interactions (prevents accidental full-screen overlays).
+// container should ignore pointer events; individual iframe containers will receive them.
+// this prevents accidental global pointer capture.
 const cssRenderer = new CSS3DRenderer();
 cssRenderer.domElement.style.position = 'absolute';
 cssRenderer.domElement.style.top = '0';
 cssRenderer.domElement.style.left = '0';
-cssRenderer.domElement.style.pointerEvents = 'none'; // <- container doesn't capture events
+cssRenderer.domElement.style.pointerEvents = 'none'; // container doesn't capture events
 cssRenderer.domElement.style.zIndex = '5';
 document.body.appendChild(cssRenderer.domElement);
 
@@ -58,7 +55,7 @@ controls.enableDamping = true;
 controls.minDistance = 1.5;
 controls.maxDistance = 25;
 
-// --- Lighting & room (kept minimal) ---
+// --- Basic room (floor, ceiling, walls) ---
 const ambient = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambient);
 
@@ -108,11 +105,12 @@ rightWall.position.x = ROOM.width / 2;
 rightWall.position.y = ROOM.height / 2;
 scene.add(rightWall);
 
-// --- Thumbnail loader ---
+// --- Loader ---
 const loader = new THREE.TextureLoader();
 loader.crossOrigin = 'anonymous';
 
-// createFrame now uses a wrapper container for CSS3D iframe so sizing is controlled
+// createFrame now wraps the iframe in a sized container (div) so its pixel footprint is fixed.
+// This prevents the iframe from "taking over" the whole screen.
 function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '', title = '', slidesEmbedUrl = '' }) {
   const frameWidth = 3.2;
   const frameHeight = 1.8;
@@ -125,7 +123,7 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
   border.castShadow = true;
   scene.add(border);
 
-  // visual plane (placeholder or thumbnail)
+  // visible plane (placeholder or thumbnail)
   const planeGeo = new THREE.PlaneGeometry(frameWidth, frameHeight);
   const placeholder = new THREE.MeshBasicMaterial({ color: 0x222222 });
   const plane = new THREE.Mesh(planeGeo, placeholder);
@@ -149,25 +147,27 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
     );
   }
 
-  // If a slidesEmbedUrl is provided, create a sized container and put the iframe inside it.
-  // Using a container (div) avoids the iframe stretching unexpectedly.
+  // Slides: create a constrained container div and add it as a CSS3DObject
   if (slidesEmbedUrl) {
-    // pixelsPerUnit heuristic - controls how many screen pixels represent one world unit for the iframe
-    const pixelsPerUnit = Math.max(120, Math.min(220, Math.floor(window.devicePixelRatio * 160)));
+    // pixelsPerUnit controls the pixel footprint; lower values avoid oversized iframes on high DPI
+    const pixelsPerUnit = Math.max(100, Math.min(160, Math.floor(window.devicePixelRatio * 140)));
     const pxW = Math.round(frameWidth * pixelsPerUnit);
     const pxH = Math.round(frameHeight * pixelsPerUnit);
 
-    // container controls the pixel footprint of the iframe
     const container = document.createElement('div');
     container.style.width = pxW + 'px';
     container.style.height = pxH + 'px';
     container.style.overflow = 'hidden';
-    container.style.pointerEvents = 'auto'; // allow interaction with the iframe only inside container
+    container.style.pointerEvents = 'auto'; // allow interacting with the iframe only inside this container
     container.style.borderRadius = '2px';
     container.style.boxSizing = 'border-box';
-    // prevent the container from being considered full-screen by browser defaults
     container.style.position = 'relative';
-    container.style.background = '#000'; // fallback background while slides load
+    container.style.background = '#000'; // fallback while slides load
+    // visual debug border so you can see the container location/size
+    if (DEBUG_FRAME_BORDER) {
+      container.style.border = '2px solid rgba(255,255,255,0.65)';
+      container.style.boxShadow = '0 6px 18px rgba(0,0,0,0.25)';
+    }
 
     const iframe = document.createElement('iframe');
     iframe.src = slidesEmbedUrl;
@@ -176,23 +176,23 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
     iframe.style.border = '0';
     iframe.style.display = 'block';
     iframe.allow = 'autoplay; encrypted-media; fullscreen';
-    iframe.style.pointerEvents = 'auto'; // iframe receives events
+    iframe.style.pointerEvents = 'auto';
+    // defensive: prevent the iframe from requesting fullscreen unless intentional via user click
+    iframe.setAttribute('allowfullscreen', '');
 
-    // append iframe to container
     container.appendChild(iframe);
 
-    // create CSS3DObject from the container (not the iframe directly)
+    // wrap container as CSS3DObject
     const cssObject = new CSS3DObject(container);
-    cssObject.position.set(x, y, z + 0.02); // slightly in front of plane
+    cssObject.position.set(x, y, z + 0.02);
     cssObject.rotation.copy(plane.rotation);
     cssScene.add(cssObject);
 
-    // store reference to adjust size on resize
+    // keep refs for resize updates
     plane.userData.cssObject = cssObject;
     plane.userData.cssContainer = container;
     plane.userData.iframe = iframe;
 
-    // debug logging
     iframe.addEventListener('load', () => {
       console.log('Slides iframe loaded (container px):', pxW, pxH, slidesEmbedUrl);
     });
@@ -201,7 +201,7 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
     });
   }
 
-  // subtle sheen in front
+  // subtle sheen overlay
   const sheen = new THREE.Mesh(planeGeo, new THREE.MeshPhongMaterial({
     color: 0xffffff,
     transparent: true,
@@ -282,7 +282,7 @@ if (modal) modal.addEventListener('click', (e) => {
   if (e.target === modal) closeVideoModal();
 });
 
-// --- Resize: update both renderers and the CSS3D container sizes ---
+// --- Resize: update both renderers and CSS3D container sizes ---
 function onResize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -291,18 +291,24 @@ function onResize() {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 
-  // update CSS3D container sizes so iframe pixel footprint matches the world frame size
-  const pixelsPerUnit = Math.max(120, Math.min(220, Math.floor(window.devicePixelRatio * 160)));
+  // smaller, safer pixelsPerUnit clamp so iframe doesn't grow too large
+  const pixelsPerUnit = Math.max(100, Math.min(160, Math.floor(window.devicePixelRatio * 140)));
   cssScene.traverse((child) => {
     if (child instanceof CSS3DObject) {
       const el = child.element;
-      // assume frame visible size 3.2 x 1.8 unless you stored per-frame sizes
       el.style.width = Math.round(3.2 * pixelsPerUnit) + 'px';
       el.style.height = Math.round(1.8 * pixelsPerUnit) + 'px';
+      // ensure element's internal iframe fills container
+      if (el.firstChild && el.firstChild.tagName === 'IFRAME') {
+        el.firstChild.style.width = '100%';
+        el.firstChild.style.height = '100%';
+      }
+      // enforce max size so nothing expands too far on very large screens
+      el.style.maxWidth = Math.round(4.2 * pixelsPerUnit) + 'px';
+      el.style.maxHeight = Math.round(2.2 * pixelsPerUnit) + 'px';
     }
   });
 
-  // layer ordering
   cssRenderer.domElement.style.zIndex = 5;
   renderer.domElement.style.zIndex = 1;
 }
@@ -310,12 +316,11 @@ window.addEventListener('resize', onResize);
 onResize();
 
 // --- Animation loop ---
-const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
 
-  // gentle float of frames
+  // gentle float
   const t = performance.now() * 0.0002;
   scene.traverse((o) => {
     if (o.userData && o.userData.type === 'video-frame') {
@@ -328,6 +333,6 @@ function animate() {
 }
 animate();
 
-// Helpful debug: list CSS3D children (so you can confirm the container exists)
+// Debug: list CSS3D children so you can verify container presence
 console.log('cssScene children:', cssScene.children);
 setTimeout(() => console.log('cssScene children after 2s:', cssScene.children), 2000);
