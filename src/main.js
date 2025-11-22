@@ -1,5 +1,5 @@
 // src/main.js
-// Updated to embed a local PPTX file (CAT TNR Program Introduction (1).pptx) in the left frame
+// Updated to embed a local PPTX file (CATTNR.pptx) in the left frame
 // using the Microsoft Office Online embed viewer. The file is expected to live in the repo (museum root).
 //
 // How it works:
@@ -9,8 +9,6 @@
 //     https://view.officeapps.live.com/op/embed.aspx?src={urlencoded_file_url}
 // - Note: the Office viewer requires the file to be publicly accessible (GitHub Pages, raw.githubusercontent, or any public URL).
 //   If you preview locally via file:// the viewer will not work. Publish the repo with GitHub Pages or serve over HTTP.
-//
-// If you want to use a different file, just change SLIDES_FILE to the new filename.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -23,11 +21,11 @@ const canvasContainer = document.body;
 const YOUTUBE_VIDEO_ID = 'FXTDo0TEp6Q';
 
 // File placed in the repository (museum root). Change this to swap files easily.
-const SLIDES_FILE = 'CAT TNR Program Introduction (1).pptx';
+const SLIDES_FILE = 'CATTNR.pptx';
 
 // Build an absolute URL to the file relative to the current page, then an Office embed URL.
 // Example resulting embed URL:
-// https://view.officeapps.live.com/op/embed.aspx?src=https%3A%2F%2Fsherryz1999.github.io%2Fmuseum%2FCAT%20TNR%20Program%20Introduction%20(1).pptx
+// https://view.officeapps.live.com/op/embed.aspx?src=https%3A%2F%2Fsherryz1999.github.io%2Fmuseum%2FCATTNR.pptx
 function buildOfficeEmbedUrl(fileName) {
   // create a relative URL resolved against the current page
   // encodeURI will preserve path separators while encoding spaces/parentheses
