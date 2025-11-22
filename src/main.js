@@ -1,7 +1,6 @@
 // src/main.js
-// Museum scene — portrait alignment, image loading, and click-to-enlarge modal.
-// Change: added a configurable gap from the wall for left/right portraits (GAP_WORLD_UNITS).
-// Set GAP_WORLD_UNITS = 1 to leave ~1 unit gap from the wall as requested.
+// Museum scene — portrait alignment, image loading, click-to-enlarge modal.
+// Change: added configurable gap and adjusted lighting so portrait frames don't cast floor shadows.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -49,8 +48,11 @@ controls.minDistance = 1.5;
 controls.maxDistance = 50;
 
 // --- Lighting ---
+// Ambient base light (unchanged)
 const ambient = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambient);
+
+// Main directional light for warm shading (keeps casting shadows for non-portrait frames)
 const dir = new THREE.DirectionalLight(0xffffff, 0.6);
 dir.position.set(-5, ROOM.height * 0.9, 5);
 dir.castShadow = true;
@@ -59,7 +61,20 @@ dir.shadow.camera.right = 20;
 dir.shadow.camera.top = 20;
 dir.shadow.camera.bottom = -20;
 dir.shadow.mapSize.set(2048, 2048);
+// small bias to reduce self-shadow acne
+dir.shadow.bias = -0.00005;
 scene.add(dir);
+
+// Hemisphere light to add soft sky/ground lighting (softens and fills shadows)
+const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.35);
+hemi.position.set(0, ROOM.height, 0);
+scene.add(hemi);
+
+// Soft non-shadowing directional fill from above to reduce visible floor shadows
+const fill = new THREE.DirectionalLight(0xffffff, 0.25);
+fill.position.set(0, ROOM.height * 0.8, -1);
+fill.castShadow = false; // do not cast shadows from this fill light
+scene.add(fill);
 
 // --- Room planes ---
 function makePlane(w, h, color) {
@@ -121,7 +136,9 @@ function createFrame({
 
   const frameMat = new THREE.MeshStandardMaterial({ color: 0x5a3b2a, roughness: 0.6, metalness: 0.02 });
   const frameMesh = new THREE.Mesh(frameGeo, frameMat);
-  frameMesh.castShadow = true; frameMesh.receiveShadow = true;
+  // portraits should not cast shadows onto the floor; normal (non-portrait) frames can cast
+  frameMesh.castShadow = !isPortrait;
+  frameMesh.receiveShadow = true;
   frameMesh.position.set(0, 0, -frameDepth / 2);
   group.add(frameMesh);
 
@@ -130,12 +147,16 @@ function createFrame({
   const matGeo = new THREE.PlaneGeometry(matW, matH);
   const matMesh = new THREE.Mesh(matGeo, new THREE.MeshStandardMaterial({ color: 0xffffff }));
   matMesh.position.set(0, 0, frameDepth / 2 + 0.005);
+  // mats don't need to cast shadows
+  matMesh.castShadow = false;
   group.add(matMesh);
 
   const thumbGeo = new THREE.PlaneGeometry(matW - 0.02, matH - 0.02);
   const placeholder = new THREE.MeshBasicMaterial({ color: 0x111111 });
   const thumbMesh = new THREE.Mesh(thumbGeo, placeholder);
-  thumbMesh.castShadow = true; thumbMesh.receiveShadow = true;
+  // prevent portrait thumbnails from casting shadows; allow others to (e.g., center frames)
+  thumbMesh.castShadow = !isPortrait;
+  thumbMesh.receiveShadow = true;
   thumbMesh.userData = Object.assign({ type: isPortrait ? 'portrait' : 'video-frame', videoId, title }, userdata);
   thumbMesh.position.set(0, 0, frameDepth / 2 + 0.01);
   group.add(thumbMesh);
@@ -169,12 +190,15 @@ function createFrame({
   const glassMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.04 });
   const glassMesh = new THREE.Mesh(thumbGeo.clone(), glassMat);
   glassMesh.position.set(0, 0, frameDepth / 2 + 0.017);
+  // don't have glass cast shadows
+  glassMesh.castShadow = false;
   group.add(glassMesh);
 
   const rimGeo = new THREE.BoxGeometry(outerW + 0.002, outerH + 0.002, 0.004);
   const rimMat = new THREE.MeshStandardMaterial({ color: 0x2c1f17, roughness: 0.7 });
   const rimMesh = new THREE.Mesh(rimGeo, rimMat);
   rimMesh.position.set(0, 0, -frameDepth / 2 - 0.002);
+  rimMesh.castShadow = !isPortrait;
   group.add(rimMesh);
 
   // place and rotate the whole group
@@ -217,6 +241,7 @@ if (portraitCount > 0) {
     const z = -ROOM.depth / 2 + GAP_WORLD_UNITS + segment * i;
     const imageUrl = new URL(file, window.location.href).href;
 
+    // isPortrait = true ensures this frame won't cast shadows
     const mesh = createFrame({
       x: leftX,
       y: portraitY,
