@@ -1,6 +1,7 @@
 // src/main.js
 // Museum scene — portrait alignment, image loading, and click-to-enlarge modal.
-// Bugfix: avoid duplicate `closeBtn` declaration by renaming the image-modal close button to `imgModalCloseBtn`.
+// Change: added a configurable gap from the wall for left/right portraits (GAP_WORLD_UNITS).
+// Set GAP_WORLD_UNITS = 1 to leave ~1 unit gap from the wall as requested.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -22,6 +23,9 @@ const PORTRAIT_DESCRIPTIONS = {
 
 // Room size
 const ROOM = { width: 20, height: 4, depth: 12 };
+
+// Gap from left/right wall in world units (change to adjust)
+const GAP_WORLD_UNITS = 1;
 
 // --- Renderer ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -201,7 +205,9 @@ if (portraitCount > 0) {
   const usableDepth = ROOM.depth - padding * 2;
   const segment = portraitCount === 1 ? 0 : usableDepth / (portraitCount - 1); // if only one, place at center
   const portraitFrameDepth = 0.06;
-  const leftX = -ROOM.width / 2 + portraitFrameDepth / 2 + 0.06;
+
+  // X coordinate just in front of left wall with GAP_WORLD_UNITS offset
+  const leftX = -ROOM.width / 2 + GAP_WORLD_UNITS + portraitFrameDepth / 2;
 
   // Y set to wall middle
   const portraitY = ROOM.height / 2;
