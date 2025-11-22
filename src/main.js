@@ -202,12 +202,12 @@ createFrame({ x: -4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, ope
 const portraitCount = PORTRAIT_FILES.length;
 if (portraitCount > 0) {
   const padding = 0.6; // avoid corners
-  const usableDepth = ROOM.depth - padding * 2;
+  const usableDepth = ROOM.depth - padding * 2 - GAP_WORLD_UNITS*2;
   const segment = portraitCount === 1 ? 0 : usableDepth / (portraitCount - 1); // if only one, place at center
   const portraitFrameDepth = 0.06;
 
   // X coordinate just in front of left wall with GAP_WORLD_UNITS offset
-  const leftX = -ROOM.width / 2 + padding*2 + portraitFrameDepth / 2;
+  const leftX = -ROOM.width / 2 + portraitFrameDepth / 2;
 
   // Y set to wall middle
   const portraitY = ROOM.height / 2;
