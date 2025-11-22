@@ -1,9 +1,14 @@
 // src/main.js
-// Museum scene — fixes for portrait alignment and image loading.
-// - Portrait frames on the left wall are now grouped and rotated as a single Group so they stay flush
-//   against the wall and remain horizontally aligned.
-// - Image URLs are built using new URL(file, window.location.href).href and loader logs failures.
-// - Double-click to edit portrait descriptions; hover shows popup. Keep serving via HTTP or GitHub Pages.
+// Museum scene — place 3 portraits centered vertically and evenly spaced horizontally on the left wall.
+// Also add click-to-enlarge modal for portraits (created dynamically).
+//
+// Key changes:
+// - Portraits Y coordinate set to the wall middle (ROOM.height / 2) to align horizontally.
+// - Portraits are evenly spaced along the left wall (equal z spacing).
+// - Each portrait userData stores imageUrl so clicks can open a large modal image.
+// - A lightweight image modal (overlay) is created and managed in this script (no HTML file edits required).
+//
+// Serve over HTTP (python -m http.server) or via GitHub Pages to allow textures to load.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -16,14 +21,14 @@ const YOUTUBE_VIDEO_ID = 'FXTDo0TEp6Q';
 // Portrait filenames relative to site root (update if images live in a subfolder)
 const PORTRAIT_FILES = ['IMG_3400.JPG', 'IMG_3402.JPG', 'IMG_3403.JPG'];
 
-// Descriptions (easy to edit)
+// Descriptions (editable)
 const PORTRAIT_DESCRIPTIONS = {
   'IMG_3400.JPG': 'Portrait 1 — description editable here or by double-clicking.',
   'IMG_3402.JPG': 'Portrait 2 — replace this text with your description.',
   'IMG_3403.JPG': 'Portrait 3 — replace this text with your description.'
 };
 
-// Room size (wider & deeper)
+// Room size
 const ROOM = { width: 20, height: 4, depth: 12 };
 
 // --- Renderer ---
@@ -81,7 +86,7 @@ if (typeof loader.setCrossOrigin === 'function') {
 }
 loader.crossOrigin = 'anonymous';
 
-// createFrame now groups all frame parts into a THREE.Group so rotation works around the group's origin
+// createFrame groups pieces so rotation/position keep the frame flush with walls
 function createFrame({
   x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01,
   openingWidth = 3.2, openingHeight = 1.8,
@@ -91,7 +96,6 @@ function createFrame({
   const outerW = openingWidth + frameBorderThickness * 2;
   const outerH = openingHeight + frameBorderThickness * 2;
 
-  // Build geometry (don't translate geometry — we'll position via group)
   const shape = new THREE.Shape();
   shape.moveTo(-outerW / 2, -outerH / 2);
   shape.lineTo(-outerW / 2, outerH / 2);
@@ -116,21 +120,15 @@ function createFrame({
     steps: 1
   };
   const frameGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-  // Note: do NOT translate geometry here. We'll place pieces relative to group.
 
-  // Build group
   const group = new THREE.Group();
 
-  // frame mesh (centered)
   const frameMat = new THREE.MeshStandardMaterial({ color: 0x5a3b2a, roughness: 0.6, metalness: 0.02 });
   const frameMesh = new THREE.Mesh(frameGeo, frameMat);
-  frameMesh.castShadow = true;
-  frameMesh.receiveShadow = true;
-  // push frame slightly back inside the group so front face is at +frameDepth/2 local z
+  frameMesh.castShadow = true; frameMesh.receiveShadow = true;
   frameMesh.position.set(0, 0, -frameDepth / 2);
   group.add(frameMesh);
 
-  // mat (white) sits slightly in front of the frame front face
   const matW = openingWidth - matInset * 2;
   const matH = openingHeight - matInset * 2;
   const matGeo = new THREE.PlaneGeometry(matW, matH);
@@ -138,7 +136,6 @@ function createFrame({
   matMesh.position.set(0, 0, frameDepth / 2 + 0.005);
   group.add(matMesh);
 
-  // thumbnail plane (in front of mat)
   const thumbGeo = new THREE.PlaneGeometry(matW - 0.02, matH - 0.02);
   const placeholder = new THREE.MeshBasicMaterial({ color: 0x111111 });
   const thumbMesh = new THREE.Mesh(thumbGeo, placeholder);
@@ -147,9 +144,8 @@ function createFrame({
   thumbMesh.position.set(0, 0, frameDepth / 2 + 0.01);
   group.add(thumbMesh);
 
-  // Load image if provided
+  // Load image if provided (absolute URL)
   if (imageUrl) {
-    // Ensure absolute url
     const absUrl = (new URL(imageUrl, window.location.href)).href;
     loader.load(
       absUrl,
@@ -157,6 +153,8 @@ function createFrame({
         tex.encoding = THREE.sRGBEncoding;
         thumbMesh.material = new THREE.MeshBasicMaterial({ map: tex });
         thumbMesh.material.needsUpdate = true;
+        // store abs url for modal usage
+        thumbMesh.userData.imageUrl = absUrl;
       },
       undefined,
       (err) => {
@@ -172,27 +170,26 @@ function createFrame({
     }, undefined, () => {});
   }
 
-  // glass sheen (in front)
   const glassMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.04 });
   const glassMesh = new THREE.Mesh(thumbGeo.clone(), glassMat);
   glassMesh.position.set(0, 0, frameDepth / 2 + 0.017);
   group.add(glassMesh);
 
-  // rim decoration behind frame
   const rimGeo = new THREE.BoxGeometry(outerW + 0.002, outerH + 0.002, 0.004);
   const rimMat = new THREE.MeshStandardMaterial({ color: 0x2c1f17, roughness: 0.7 });
   const rimMesh = new THREE.Mesh(rimGeo, rimMat);
   rimMesh.position.set(0, 0, -frameDepth / 2 - 0.002);
   group.add(rimMesh);
 
-  // Place group at desired world position and apply rotation
+  // place and rotate the whole group
   group.position.set(x, y, z);
   group.rotation.y = rotationY;
   scene.add(group);
 
-  // return the thumbnail mesh so callers can attach userdata / interactions
-  // but keep a reference to its parent group (useful for debugging)
+  // keep reference to group in userData
   thumbMesh.userData._group = group;
+  // ensure imageUrl stored even if loader hasn't finished yet
+  if (!thumbMesh.userData.imageUrl) thumbMesh.userData.imageUrl = imageUrl ? (new URL(imageUrl, window.location.href)).href : '';
   return thumbMesh;
 }
 
@@ -205,41 +202,33 @@ createFrame({
 createFrame({ x: 4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, title: 'Art 2', rotationY: 0 });
 createFrame({ x: -4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, title: 'Art 1', rotationY: 0 });
 
-// --- Portrait frames along the LEFT wall (evenly spaced horizontally) ---
+// --- Portrait frames along the LEFT wall (centered vertically, evenly spaced horizontally) ---
 const portraitCount = PORTRAIT_FILES.length;
 if (portraitCount > 0) {
-  // evenly spaced z positions along left wall (avoid being flush with corners)
-  const padding = 0.6;
+  const padding = 0.6; // avoid corners
   const usableDepth = ROOM.depth - padding * 2;
-  const segment = usableDepth / (portraitCount - 1 || 1); // if only one, avoid /0
-
+  const segment = portraitCount === 1 ? 0 : usableDepth / (portraitCount - 1); // if only one, place at center
   const portraitFrameDepth = 0.06;
-  // X coordinate just in front of left wall
   const leftX = -ROOM.width / 2 + portraitFrameDepth / 2 + 0.06;
 
-  // vertical stack center Y
-  const centerY = 1.6;
-  const verticalSpacing = 0.95; // distance between portraits vertically (tweak as needed)
-  const startY = centerY + (verticalSpacing * (portraitCount - 1)) / 2;
+  // Y set to wall middle
+  const portraitY = ROOM.height / 2;
 
   for (let i = 0; i < portraitCount; i++) {
     const file = PORTRAIT_FILES[i];
-    const z = -ROOM.depth / 2 + padding + segment * i; // evenly spaced
-    const y = startY - i * verticalSpacing;
-
-    // Build absolute URL for the image (works on GitHub Pages or local http server)
+    const z = -ROOM.depth / 2 + padding + segment * i;
     const imageUrl = new URL(file, window.location.href).href;
 
     const mesh = createFrame({
       x: leftX,
-      y: y,
+      y: portraitY,
       z: z,
       openingWidth: 1.2,
       openingHeight: 1.8,
       frameDepth: portraitFrameDepth,
       frameBorderThickness: 0.08,
       matInset: 0.08,
-      rotationY: Math.PI / 2, // face inward from left wall
+      rotationY: Math.PI / 2, // face inward
       imageUrl: imageUrl,
       isPortrait: true,
       userdata: { filename: file }
@@ -250,24 +239,96 @@ if (portraitCount > 0) {
   }
 }
 
-// --- Raycasting & popup UI ---
+// --- Image modal (click-to-enlarge) ---
+// Create modal DOM elements dynamically so no index.html change required
+const imgModal = document.createElement('div');
+imgModal.id = 'image-modal';
+Object.assign(imgModal.style, {
+  position: 'fixed',
+  inset: 0,
+  display: 'none',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'rgba(0,0,0,0.75)',
+  zIndex: 2000
+});
+const imgContainer = document.createElement('div');
+Object.assign(imgContainer.style, {
+  maxWidth: '90%',
+  maxHeight: '90%',
+  boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
+  borderRadius: '6px',
+  overflow: 'hidden',
+  background: '#111'
+});
+const imgEl = document.createElement('img');
+imgEl.id = 'modal-image';
+Object.assign(imgEl.style, {
+  display: 'block',
+  width: '100%',
+  height: 'auto',
+  maxHeight: '90vh',
+  objectFit: 'contain',
+  background: '#000'
+});
+const closeBtn = document.createElement('button');
+closeBtn.innerText = '×';
+Object.assign(closeBtn.style, {
+  position: 'absolute',
+  top: '18px',
+  right: '22px',
+  zIndex: 2100,
+  fontSize: '28px',
+  color: '#fff',
+  background: 'transparent',
+  border: 'none',
+  cursor: 'pointer'
+});
+
+// Append elements
+imgContainer.appendChild(imgEl);
+imgModal.appendChild(imgContainer);
+imgModal.appendChild(closeBtn);
+document.body.appendChild(imgModal);
+
+function openImageModal(src, alt = '') {
+  if (!src) return;
+  imgEl.src = src;
+  imgEl.alt = alt;
+  imgModal.style.display = 'flex';
+}
+function closeImageModal() {
+  imgModal.style.display = 'none';
+  imgEl.src = '';
+}
+closeBtn.addEventListener('click', closeImageModal);
+imgModal.addEventListener('click', (e) => {
+  if (e.target === imgModal) closeImageModal();
+});
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeImageModal();
+});
+
+// --- Raycasting & popup UI (hover + click) ---
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
 const popup = document.createElement('div');
 popup.id = 'desc-popup';
-popup.style.position = 'fixed';
-popup.style.pointerEvents = 'none';
-popup.style.background = 'rgba(0,0,0,0.78)';
-popup.style.color = '#fff';
-popup.style.padding = '8px 10px';
-popup.style.borderRadius = '6px';
-popup.style.fontFamily = 'system-ui, Arial, sans-serif';
-popup.style.fontSize = '13px';
-popup.style.maxWidth = '320px';
-popup.style.display = 'none';
-popup.style.zIndex = '1000';
-popup.style.boxShadow = '0 6px 18px rgba(0,0,0,0.35)';
+Object.assign(popup.style, {
+  position: 'fixed',
+  pointerEvents: 'none',
+  background: 'rgba(0,0,0,0.78)',
+  color: '#fff',
+  padding: '8px 10px',
+  borderRadius: '6px',
+  fontFamily: 'system-ui, Arial, sans-serif',
+  fontSize: '13px',
+  maxWidth: '320px',
+  display: 'none',
+  zIndex: '1000',
+  boxShadow: '0 6px 18px rgba(0,0,0,0.35)'
+});
 document.body.appendChild(popup);
 
 function showPopup(text, clientX, clientY) {
@@ -284,10 +345,9 @@ function onPointerMove(event) {
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
   raycaster.setFromCamera(pointer, camera);
+  // intersect children so we detect thumbMesh inside groups
   const intersects = raycaster.intersectObjects(scene.children, true);
-
   let found = false;
   for (const it of intersects) {
     const obj = it.object;
@@ -303,7 +363,31 @@ function onPointerMove(event) {
 }
 window.addEventListener('pointermove', onPointerMove);
 
-// double-click to edit portrait descriptions
+// pointerdown: click-to-enlarge for portraits, click center frame to open video modal
+function onPointerDown(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const intersects = raycaster.intersectObjects(scene.children, true);
+
+  for (const it of intersects) {
+    const obj = it.object;
+    if (obj.userData && obj.userData.type === 'portrait') {
+      // open image modal
+      const src = obj.userData.imageUrl || (obj.userData._group && obj.userData._group.userData && obj.userData._group.userData.imageUrl) || '';
+      openImageModal(src, obj.userData.filename || '');
+      return;
+    }
+    if (obj.userData && obj.userData.type === 'video-frame' && obj.userData.videoId) {
+      openVideoModal(obj.userData.videoId);
+      return;
+    }
+  }
+}
+window.addEventListener('pointerdown', onPointerDown);
+
+// double-click editing of descriptions
 function onDoubleClick(event) {
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -352,22 +436,6 @@ function closeVideoModal() {
 if (closeBtn) closeBtn.addEventListener('click', closeVideoModal);
 if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeVideoModal(); });
 
-function onPointerDown(event) {
-  const rect = renderer.domElement.getBoundingClientRect();
-  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-  raycaster.setFromCamera(pointer, camera);
-  const intersects = raycaster.intersectObjects(scene.children, true);
-  for (const i of intersects) {
-    const obj = i.object;
-    if (obj.userData && obj.userData.type === 'video-frame' && obj.userData.videoId) {
-      openVideoModal(obj.userData.videoId);
-      break;
-    }
-  }
-}
-window.addEventListener('pointerdown', onPointerDown);
-
 // --- Resize / render ---
 function onResize() {
   const w = window.innerWidth; const h = window.innerHeight;
@@ -392,7 +460,7 @@ function animate() {
 }
 animate();
 
-// --- Debug logs ---
+// --- Helpful logs ---
 console.log('Portrait files:', PORTRAIT_FILES);
 console.log('PORTRAIT_DESCRIPTIONS (editable):', PORTRAIT_DESCRIPTIONS);
 console.log('If images do not appear, open DevTools → Network to check for 404s or CORS errors.');
