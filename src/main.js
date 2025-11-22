@@ -1,17 +1,9 @@
 // src/main.js
-// Museum scene (restored museum-style frame) — fixes for portrait alignment + image loading.
-//
-// Changes in this version:
-// - Room kept larger (as you asked previously).
-// - Portrait frames on the left wall are now positioned evenly along the wall (no manual hard-coded zs).
-// - Image URLs are built with `new URL(file, window.location.href).href` so they resolve correctly
-//   whether served from GitHub Pages or a local HTTP server. Do NOT open index.html with file://
-//   when testing — serve via HTTP (python -m http.server 8080).
-// - Portrait X position computed so frames sit flush on the left wall regardless of rotation.
-// - Descriptions still editable via the PORTRAIT_DESCRIPTIONS object at the top, and double-clicking
-//   a portrait opens a prompt to edit it live. Hover shows a small popup near the cursor.
-// - If images still don't appear, confirm the files are uploaded to the repository at the path listed
-//   in PORTRAIT_FILES (repo root by default) or adjust paths accordingly.
+// Museum scene — fixes for portrait alignment and image loading.
+// - Portrait frames on the left wall are now grouped and rotated as a single Group so they stay flush
+//   against the wall and remain horizontally aligned.
+// - Image URLs are built using new URL(file, window.location.href).href and loader logs failures.
+// - Double-click to edit portrait descriptions; hover shows popup. Keep serving via HTTP or GitHub Pages.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -19,25 +11,20 @@ import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/cont
 const canvasContainer = document.body;
 
 // --- Configuration ---
-// Center frame YouTube ID
 const YOUTUBE_VIDEO_ID = 'FXTDo0TEp6Q';
 
-// Portrait filenames (relative to site root). Update these if you place images in a folder.
+// Portrait filenames relative to site root (update if images live in a subfolder)
 const PORTRAIT_FILES = ['IMG_3400.JPG', 'IMG_3402.JPG', 'IMG_3403.JPG'];
 
-// Descriptions (easy to edit). Keys are filenames.
+// Descriptions (easy to edit)
 const PORTRAIT_DESCRIPTIONS = {
   'IMG_3400.JPG': 'Portrait 1 — description editable here or by double-clicking.',
   'IMG_3402.JPG': 'Portrait 2 — replace this text with your description.',
   'IMG_3403.JPG': 'Portrait 3 — replace this text with your description.'
 };
 
-// --- Room size (wider & deeper) ---
-const ROOM = {
-  width: 20,
-  height: 4,
-  depth: 12
-};
+// Room size (wider & deeper)
+const ROOM = { width: 20, height: 4, depth: 12 };
 
 // --- Renderer ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -63,7 +50,6 @@ controls.maxDistance = 50;
 // --- Lighting ---
 const ambient = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambient);
-
 const dir = new THREE.DirectionalLight(0xffffff, 0.6);
 dir.position.set(-5, ROOM.height * 0.9, 5);
 dir.castShadow = true;
@@ -80,70 +66,32 @@ function makePlane(w, h, color) {
   const geo = new THREE.PlaneGeometry(w, h);
   return new THREE.Mesh(geo, mat);
 }
-
 const floor = makePlane(ROOM.width, ROOM.depth, 0xede6dd);
-floor.rotation.x = -Math.PI / 2;
-floor.position.y = 0;
-floor.receiveShadow = true;
-scene.add(floor);
+floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
+const ceiling = makePlane(ROOM.width, ROOM.depth, 0xf0f0f0); ceiling.rotation.x = Math.PI / 2; ceiling.position.y = ROOM.height; scene.add(ceiling);
+const backWall = makePlane(ROOM.width, ROOM.height, 0xffffff); backWall.position.z = -ROOM.depth / 2; backWall.position.y = ROOM.height / 2; scene.add(backWall);
+const frontWall = makePlane(ROOM.width, ROOM.height, 0xffffff); frontWall.position.z = ROOM.depth / 2; frontWall.rotation.y = Math.PI; frontWall.position.y = ROOM.height / 2; scene.add(frontWall);
+const leftWall = makePlane(ROOM.depth, ROOM.height, 0xffffff); leftWall.rotation.y = Math.PI / 2; leftWall.position.x = -ROOM.width / 2; leftWall.position.y = ROOM.height / 2; scene.add(leftWall);
+const rightWall = makePlane(ROOM.depth, ROOM.height, 0xffffff); rightWall.rotation.y = -Math.PI / 2; rightWall.position.x = ROOM.width / 2; rightWall.position.y = ROOM.height / 2; scene.add(rightWall);
 
-const ceiling = makePlane(ROOM.width, ROOM.depth, 0xf0f0f0);
-ceiling.rotation.x = Math.PI / 2;
-ceiling.position.y = ROOM.height;
-scene.add(ceiling);
-
-const backWall = makePlane(ROOM.width, ROOM.height, 0xffffff);
-backWall.position.z = -ROOM.depth / 2;
-backWall.position.y = ROOM.height / 2;
-scene.add(backWall);
-
-const frontWall = makePlane(ROOM.width, ROOM.height, 0xffffff);
-frontWall.position.z = ROOM.depth / 2;
-frontWall.rotation.y = Math.PI;
-frontWall.position.y = ROOM.height / 2;
-scene.add(frontWall);
-
-const leftWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
-leftWall.rotation.y = Math.PI / 2;
-leftWall.position.x = -ROOM.width / 2;
-leftWall.position.y = ROOM.height / 2;
-scene.add(leftWall);
-
-const rightWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
-rightWall.rotation.y = -Math.PI / 2;
-rightWall.position.x = ROOM.width / 2;
-rightWall.position.y = ROOM.height / 2;
-scene.add(rightWall);
-
-// --- Loader ---
+// --- Loader (with CORS hint) ---
 const loader = new THREE.TextureLoader();
-// hint crossOrigin
 if (typeof loader.setCrossOrigin === 'function') {
   try { loader.setCrossOrigin('anonymous'); } catch (e) {}
 }
 loader.crossOrigin = 'anonymous';
 
-// Flexible createFrame: keeps frame sizes fixed unless you pass different openingWidth/openingHeight.
+// createFrame now groups all frame parts into a THREE.Group so rotation works around the group's origin
 function createFrame({
-  x = 0,
-  y = 1.6,
-  z = -ROOM.depth / 2 + 0.01,
-  openingWidth = 3.2,
-  openingHeight = 1.8,
-  frameDepth = 0.08,
-  frameBorderThickness = 0.12,
-  matInset = 0.12,
-  videoId = '',
-  title = '',
-  rotationY = 0,
-  imageUrl = '',
-  isPortrait = false,
-  userdata = {}
+  x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01,
+  openingWidth = 3.2, openingHeight = 1.8,
+  frameDepth = 0.08, frameBorderThickness = 0.12, matInset = 0.12,
+  videoId = '', title = '', rotationY = 0, imageUrl = '', isPortrait = false, userdata = {}
 } = {}) {
   const outerW = openingWidth + frameBorderThickness * 2;
   const outerH = openingHeight + frameBorderThickness * 2;
 
-  // Frame shape (outer rect with inner hole)
+  // Build geometry (don't translate geometry — we'll position via group)
   const shape = new THREE.Shape();
   shape.moveTo(-outerW / 2, -outerH / 2);
   shape.lineTo(-outerW / 2, outerH / 2);
@@ -168,51 +116,51 @@ function createFrame({
     steps: 1
   };
   const frameGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-  // recenter so extrusion is symmetric
-  frameGeo.translate(0, 0, -frameDepth / 2);
+  // Note: do NOT translate geometry here. We'll place pieces relative to group.
 
+  // Build group
+  const group = new THREE.Group();
+
+  // frame mesh (centered)
   const frameMat = new THREE.MeshStandardMaterial({ color: 0x5a3b2a, roughness: 0.6, metalness: 0.02 });
   const frameMesh = new THREE.Mesh(frameGeo, frameMat);
   frameMesh.castShadow = true;
   frameMesh.receiveShadow = true;
-  // position the whole frame
-  frameMesh.position.set(x, y, z);
-  frameMesh.rotation.y = rotationY;
-  scene.add(frameMesh);
+  // push frame slightly back inside the group so front face is at +frameDepth/2 local z
+  frameMesh.position.set(0, 0, -frameDepth / 2);
+  group.add(frameMesh);
 
-  // Mat (white inset) slightly in front of frame
+  // mat (white) sits slightly in front of the frame front face
   const matW = openingWidth - matInset * 2;
   const matH = openingHeight - matInset * 2;
   const matGeo = new THREE.PlaneGeometry(matW, matH);
   const matMesh = new THREE.Mesh(matGeo, new THREE.MeshStandardMaterial({ color: 0xffffff }));
-  matMesh.position.set(x, y, z + frameDepth / 2 + 0.005);
-  matMesh.rotation.y = rotationY;
-  scene.add(matMesh);
+  matMesh.position.set(0, 0, frameDepth / 2 + 0.005);
+  group.add(matMesh);
 
-  // Thumbnail / image plane
+  // thumbnail plane (in front of mat)
   const thumbGeo = new THREE.PlaneGeometry(matW - 0.02, matH - 0.02);
   const placeholder = new THREE.MeshBasicMaterial({ color: 0x111111 });
   const thumbMesh = new THREE.Mesh(thumbGeo, placeholder);
-  thumbMesh.position.set(x, y, z + frameDepth / 2 + 0.01);
-  thumbMesh.rotation.y = rotationY;
+  thumbMesh.castShadow = true; thumbMesh.receiveShadow = true;
   thumbMesh.userData = Object.assign({ type: isPortrait ? 'portrait' : 'video-frame', videoId, title }, userdata);
-  thumbMesh.castShadow = true;
-  thumbMesh.receiveShadow = true;
-  scene.add(thumbMesh);
+  thumbMesh.position.set(0, 0, frameDepth / 2 + 0.01);
+  group.add(thumbMesh);
 
-  // Load image if provided (imageUrl should be absolute or relative to page)
+  // Load image if provided
   if (imageUrl) {
+    // Ensure absolute url
+    const absUrl = (new URL(imageUrl, window.location.href)).href;
     loader.load(
-      imageUrl,
+      absUrl,
       (tex) => {
         tex.encoding = THREE.sRGBEncoding;
         thumbMesh.material = new THREE.MeshBasicMaterial({ map: tex });
         thumbMesh.material.needsUpdate = true;
       },
       undefined,
-      () => {
-        // keep placeholder if load fails
-        console.warn('Failed to load image for frame:', imageUrl);
+      (err) => {
+        console.warn('Failed to load image for frame:', absUrl, err);
       }
     );
   } else if (videoId) {
@@ -224,67 +172,74 @@ function createFrame({
     }, undefined, () => {});
   }
 
-  // Glass sheen
+  // glass sheen (in front)
   const glassMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.04 });
   const glassMesh = new THREE.Mesh(thumbGeo.clone(), glassMat);
-  glassMesh.position.set(x, y, z + frameDepth / 2 + 0.017);
-  glassMesh.rotation.y = rotationY;
-  scene.add(glassMesh);
+  glassMesh.position.set(0, 0, frameDepth / 2 + 0.017);
+  group.add(glassMesh);
 
-  // Rim decoration behind frame
+  // rim decoration behind frame
   const rimGeo = new THREE.BoxGeometry(outerW + 0.002, outerH + 0.002, 0.004);
   const rimMat = new THREE.MeshStandardMaterial({ color: 0x2c1f17, roughness: 0.7 });
   const rimMesh = new THREE.Mesh(rimGeo, rimMat);
-  rimMesh.position.set(x, y, z - frameDepth / 2 - 0.002);
-  rimMesh.rotation.y = rotationY;
-  scene.add(rimMesh);
+  rimMesh.position.set(0, 0, -frameDepth / 2 - 0.002);
+  group.add(rimMesh);
 
+  // Place group at desired world position and apply rotation
+  group.position.set(x, y, z);
+  group.rotation.y = rotationY;
+  scene.add(group);
+
+  // return the thumbnail mesh so callers can attach userdata / interactions
+  // but keep a reference to its parent group (useful for debugging)
+  thumbMesh.userData._group = group;
   return thumbMesh;
 }
 
-// --- Main frames (center and decorations) ---
+// --- Main frames (center + decorations) ---
 createFrame({
-  x: 0,
-  y: 1.6,
-  z: -ROOM.depth / 2 + 0.06,
-  openingWidth: 3.2,
-  openingHeight: 1.8,
-  videoId: YOUTUBE_VIDEO_ID,
-  title: 'Violin Performance',
-  rotationY: 0
+  x: 0, y: 1.6, z: -ROOM.depth / 2 + 0.06,
+  openingWidth: 3.2, openingHeight: 1.8,
+  videoId: YOUTUBE_VIDEO_ID, title: 'Violin Performance', rotationY: 0
 });
-
 createFrame({ x: 4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, title: 'Art 2', rotationY: 0 });
 createFrame({ x: -4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, title: 'Art 1', rotationY: 0 });
 
-// --- Portrait frames along the LEFT wall (evenly spaced) ---
+// --- Portrait frames along the LEFT wall (evenly spaced horizontally) ---
 const portraitCount = PORTRAIT_FILES.length;
 if (portraitCount > 0) {
-  // compute even z positions along the left wall (avoid edges)
-  const segment = ROOM.depth / (portraitCount + 1);
-  // x should be slightly in front of the left wall; use half the portrait frameDepth to offset
+  // evenly spaced z positions along left wall (avoid being flush with corners)
+  const padding = 0.6;
+  const usableDepth = ROOM.depth - padding * 2;
+  const segment = usableDepth / (portraitCount - 1 || 1); // if only one, avoid /0
+
   const portraitFrameDepth = 0.06;
+  // X coordinate just in front of left wall
   const leftX = -ROOM.width / 2 + portraitFrameDepth / 2 + 0.06;
+
+  // vertical stack center Y
+  const centerY = 1.6;
+  const verticalSpacing = 0.95; // distance between portraits vertically (tweak as needed)
+  const startY = centerY + (verticalSpacing * (portraitCount - 1)) / 2;
 
   for (let i = 0; i < portraitCount; i++) {
     const file = PORTRAIT_FILES[i];
-    // compute positions:
-    const z = -ROOM.depth / 2 + segment * (i + 1); // evenly spaced
-    // compute y positions centered around eye-level; adjust as desired
-    const y = 1.6 + 0.6 - (i * (1.0 * (portraitCount - 1) / Math.max(1, portraitCount - 1))); // distribute vertically a bit
-    // Build an absolute URL for the image so loaders resolve correctly
+    const z = -ROOM.depth / 2 + padding + segment * i; // evenly spaced
+    const y = startY - i * verticalSpacing;
+
+    // Build absolute URL for the image (works on GitHub Pages or local http server)
     const imageUrl = new URL(file, window.location.href).href;
 
     const mesh = createFrame({
       x: leftX,
-      y: 1.6 - (i - Math.floor(portraitCount / 2)) * 0.8, // stack vertically: spread around center
+      y: y,
       z: z,
       openingWidth: 1.2,
       openingHeight: 1.8,
       frameDepth: portraitFrameDepth,
       frameBorderThickness: 0.08,
       matInset: 0.08,
-      rotationY: Math.PI / 2, // face inward from the left wall
+      rotationY: Math.PI / 2, // face inward from left wall
       imageUrl: imageUrl,
       isPortrait: true,
       userdata: { filename: file }
@@ -295,11 +250,10 @@ if (portraitCount > 0) {
   }
 }
 
-// --- Raycasting and popup UI ---
+// --- Raycasting & popup UI ---
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
-// Popup DOM element
 const popup = document.createElement('div');
 popup.id = 'desc-popup';
 popup.style.position = 'fixed';
@@ -318,17 +272,13 @@ document.body.appendChild(popup);
 
 function showPopup(text, clientX, clientY) {
   popup.innerText = text || '';
-  // keep popup inside viewport
   const left = Math.min(window.innerWidth - 340, clientX + 14);
   const top = Math.min(window.innerHeight - 80, clientY + 14);
   popup.style.left = left + 'px';
   popup.style.top = top + 'px';
   popup.style.display = 'block';
 }
-
-function hidePopup() {
-  popup.style.display = 'none';
-}
+function hidePopup() { popup.style.display = 'none'; }
 
 function onPointerMove(event) {
   const rect = renderer.domElement.getBoundingClientRect();
@@ -336,7 +286,7 @@ function onPointerMove(event) {
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
   raycaster.setFromCamera(pointer, camera);
-  const intersects = raycaster.intersectObjects(scene.children, false);
+  const intersects = raycaster.intersectObjects(scene.children, true);
 
   let found = false;
   for (const it of intersects) {
@@ -353,14 +303,13 @@ function onPointerMove(event) {
 }
 window.addEventListener('pointermove', onPointerMove);
 
-// double-click to edit description
+// double-click to edit portrait descriptions
 function onDoubleClick(event) {
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
   raycaster.setFromCamera(pointer, camera);
-  const intersects = raycaster.intersectObjects(scene.children, false);
+  const intersects = raycaster.intersectObjects(scene.children, true);
   for (const it of intersects) {
     const obj = it.object;
     if (obj.userData && obj.userData.type === 'portrait') {
@@ -407,9 +356,8 @@ function onPointerDown(event) {
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
   raycaster.setFromCamera(pointer, camera);
-  const intersects = raycaster.intersectObjects(scene.children, false);
+  const intersects = raycaster.intersectObjects(scene.children, true);
   for (const i of intersects) {
     const obj = i.object;
     if (obj.userData && obj.userData.type === 'video-frame' && obj.userData.videoId) {
@@ -420,10 +368,9 @@ function onPointerDown(event) {
 }
 window.addEventListener('pointerdown', onPointerDown);
 
-// --- Resize ---
+// --- Resize / render ---
 function onResize() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
+  const w = window.innerWidth; const h = window.innerHeight;
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
@@ -431,23 +378,21 @@ function onResize() {
 window.addEventListener('resize', onResize);
 onResize();
 
-// --- Animation ---
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
-
-  // subtle float for frames
+  // subtle float
   const t = performance.now() * 0.0002;
   scene.traverse((o) => {
     if (o.userData && (o.userData.type === 'video-frame' || o.userData.type === 'portrait')) {
       o.rotation.z = Math.sin(t + (o.position.x || 0)) * 0.002;
     }
   });
-
   renderer.render(scene, camera);
 }
 animate();
 
-// --- Helpful logs ---
+// --- Debug logs ---
 console.log('Portrait files:', PORTRAIT_FILES);
 console.log('PORTRAIT_DESCRIPTIONS (editable):', PORTRAIT_DESCRIPTIONS);
+console.log('If images do not appear, open DevTools → Network to check for 404s or CORS errors.');
