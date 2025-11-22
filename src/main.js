@@ -1,9 +1,16 @@
 // src/main.js
-// Fixes for CSS3D iframe sizing so Google Slides stays within the left frame.
-// - Adds a small visual debug border on the iframe container (toggle DEBUG_FRAME_BORDER).
-// - Constrains iframe pixel footprint via pxW/pxH and clamps pixelsPerUnit to avoid full-screen growth.
-// - Ensures cssRenderer container ignores pointer events while the iframe container receives them.
-// - Keeps SLIDES_EMBED_URL easy to swap.
+// Updated to embed a local PPTX file (CAT TNR Program Introduction (1).pptx) in the left frame
+// using the Microsoft Office Online embed viewer. The file is expected to live in the repo (museum root).
+//
+// How it works:
+// - Set SLIDES_FILE to the file name in the project (easy to swap).
+// - The script builds an absolute URL to that file (relative to the current page) and then
+//   constructs the Office viewer embed URL:
+//     https://view.officeapps.live.com/op/embed.aspx?src={urlencoded_file_url}
+// - Note: the Office viewer requires the file to be publicly accessible (GitHub Pages, raw.githubusercontent, or any public URL).
+//   If you preview locally via file:// the viewer will not work. Publish the repo with GitHub Pages or serve over HTTP.
+//
+// If you want to use a different file, just change SLIDES_FILE to the new filename.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -12,15 +19,31 @@ import { CSS3DRenderer, CSS3DObject } from 'https://unpkg.com/three@0.159.0/exam
 const canvasContainer = document.body;
 
 // --- Configuration ---
+// YouTube video ID for main (center) frame:
 const YOUTUBE_VIDEO_ID = 'FXTDo0TEp6Q';
 
-// Use the published/embed URL from Google Slides (recommended).
-const SLIDES_EMBED_URL = 'https://docs.google.com/presentation/d/1wQomrf_cSdXAveNj1rNkl9fo3GOgK_dN/embed?start=false&loop=false&delayms=3000';
+// File placed in the repository (museum root). Change this to swap files easily.
+const SLIDES_FILE = 'CAT TNR Program Introduction (1).pptx';
 
-// Toggle a visible border to confirm iframe container placement (set to false to hide)
-const DEBUG_FRAME_BORDER = true;
+// Build an absolute URL to the file relative to the current page, then an Office embed URL.
+// Example resulting embed URL:
+// https://view.officeapps.live.com/op/embed.aspx?src=https%3A%2F%2Fsherryz1999.github.io%2Fmuseum%2FCAT%20TNR%20Program%20Introduction%20(1).pptx
+function buildOfficeEmbedUrl(fileName) {
+  // create a relative URL resolved against the current page
+  // encodeURI will preserve path separators while encoding spaces/parentheses
+  const relative = './' + encodeURI(fileName);
+  const absoluteFileUrl = new URL(relative, window.location.href).href;
+  const officeEmbed = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(absoluteFileUrl);
+  return officeEmbed;
+}
 
-const ROOM = { width: 12, height: 4, depth: 8 };
+const SLIDES_EMBED_URL = buildOfficeEmbedUrl(SLIDES_FILE);
+
+const ROOM = {
+  width: 12,
+  height: 4,
+  depth: 8
+};
 
 // --- WebGL renderer ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -30,13 +53,11 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 // --- CSS3D renderer for iframes ---
-// container should ignore pointer events; individual iframe containers will receive them.
-// this prevents accidental global pointer capture.
 const cssRenderer = new CSS3DRenderer();
 cssRenderer.domElement.style.position = 'absolute';
 cssRenderer.domElement.style.top = '0';
 cssRenderer.domElement.style.left = '0';
-cssRenderer.domElement.style.pointerEvents = 'none'; // container doesn't capture events
+cssRenderer.domElement.style.pointerEvents = 'none'; // container won't capture events; iframe containers will
 cssRenderer.domElement.style.zIndex = '5';
 document.body.appendChild(cssRenderer.domElement);
 
@@ -55,7 +76,7 @@ controls.enableDamping = true;
 controls.minDistance = 1.5;
 controls.maxDistance = 25;
 
-// --- Basic room (floor, ceiling, walls) ---
+// --- Lighting ---
 const ambient = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambient);
 
@@ -65,12 +86,14 @@ dir.castShadow = true;
 dir.shadow.mapSize.set(1024, 1024);
 scene.add(dir);
 
+// --- Room helper ---
 function makePlane(w, h, color) {
   const mat = new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide });
   const geo = new THREE.PlaneGeometry(w, h);
   return new THREE.Mesh(geo, mat);
 }
 
+// floor, ceiling, walls
 const floor = makePlane(ROOM.width, ROOM.depth, 0xede6dd);
 floor.rotation.x = -Math.PI / 2;
 floor.position.y = 0;
@@ -109,13 +132,12 @@ scene.add(rightWall);
 const loader = new THREE.TextureLoader();
 loader.crossOrigin = 'anonymous';
 
-// createFrame now wraps the iframe in a sized container (div) so its pixel footprint is fixed.
-// This prevents the iframe from "taking over" the whole screen.
-function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '', title = '', slidesEmbedUrl = '' }) {
+// createFrame supports either a YouTube video thumbnail or an embedded iframe (CSS3D).
+function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '', title = '', embedUrl = '' }) {
   const frameWidth = 3.2;
   const frameHeight = 1.8;
 
-  // decorative border behind the panel
+  // frame border (simple box behind the display)
   const borderGeo = new THREE.BoxGeometry(frameWidth + 0.12, frameHeight + 0.12, 0.08);
   const borderMat = new THREE.MeshStandardMaterial({ color: 0x2f2f2f });
   const border = new THREE.Mesh(borderGeo, borderMat);
@@ -123,17 +145,17 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
   border.castShadow = true;
   scene.add(border);
 
-  // visible plane (placeholder or thumbnail)
+  // visible display plane
   const planeGeo = new THREE.PlaneGeometry(frameWidth, frameHeight);
-  const placeholder = new THREE.MeshBasicMaterial({ color: 0x222222 });
+  const placeholder = new THREE.MeshBasicMaterial({ color: 0x111111 });
   const plane = new THREE.Mesh(planeGeo, placeholder);
   plane.position.set(x, y, z);
-  plane.userData = { type: 'video-frame', videoId, title, slidesEmbedUrl };
+  plane.userData = { type: 'video-frame', videoId, title, embedUrl };
   plane.receiveShadow = true;
   plane.castShadow = true;
   scene.add(plane);
 
-  // load YouTube thumbnail if provided
+  // If YouTube ID provided, load its thumbnail
   if (videoId) {
     const thumbUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
     loader.load(
@@ -147,9 +169,10 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
     );
   }
 
-  // Slides: create a constrained container div and add it as a CSS3DObject
-  if (slidesEmbedUrl) {
-    // pixelsPerUnit controls the pixel footprint; lower values avoid oversized iframes on high DPI
+  // If an embedUrl is provided, create a constrained container div and add an iframe inside,
+  // then convert to a CSS3DObject positioned exactly in front of the plane.
+  if (embedUrl) {
+    // pixelsPerUnit determines pixel footprint: tune to your liking
     const pixelsPerUnit = Math.max(100, Math.min(160, Math.floor(window.devicePixelRatio * 140)));
     const pxW = Math.round(frameWidth * pixelsPerUnit);
     const pxH = Math.round(frameHeight * pixelsPerUnit);
@@ -158,50 +181,44 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
     container.style.width = pxW + 'px';
     container.style.height = pxH + 'px';
     container.style.overflow = 'hidden';
-    container.style.pointerEvents = 'auto'; // allow interacting with the iframe only inside this container
-    container.style.borderRadius = '2px';
+    container.style.pointerEvents = 'auto'; // allow interaction inside this container
     container.style.boxSizing = 'border-box';
     container.style.position = 'relative';
-    container.style.background = '#000'; // fallback while slides load
-    // visual debug border so you can see the container location/size
-    if (DEBUG_FRAME_BORDER) {
-      container.style.border = '2px solid rgba(255,255,255,0.65)';
-      container.style.boxShadow = '0 6px 18px rgba(0,0,0,0.25)';
-    }
+    container.style.background = '#000';
+    container.style.borderRadius = '2px';
+    container.style.boxShadow = '0 6px 18px rgba(0,0,0,0.25)';
 
     const iframe = document.createElement('iframe');
-    iframe.src = slidesEmbedUrl;
+    iframe.src = embedUrl;
     iframe.style.width = '100%';
     iframe.style.height = '100%';
     iframe.style.border = '0';
     iframe.style.display = 'block';
     iframe.allow = 'autoplay; encrypted-media; fullscreen';
-    iframe.style.pointerEvents = 'auto';
-    // defensive: prevent the iframe from requesting fullscreen unless intentional via user click
     iframe.setAttribute('allowfullscreen', '');
+    iframe.style.pointerEvents = 'auto';
 
     container.appendChild(iframe);
 
-    // wrap container as CSS3DObject
+    // CSS3DObject from the container
     const cssObject = new CSS3DObject(container);
     cssObject.position.set(x, y, z + 0.02);
     cssObject.rotation.copy(plane.rotation);
     cssScene.add(cssObject);
 
-    // keep refs for resize updates
     plane.userData.cssObject = cssObject;
     plane.userData.cssContainer = container;
     plane.userData.iframe = iframe;
 
     iframe.addEventListener('load', () => {
-      console.log('Slides iframe loaded (container px):', pxW, pxH, slidesEmbedUrl);
+      console.log('Embedded file iframe loaded:', embedUrl);
     });
     iframe.addEventListener('error', (e) => {
-      console.warn('Slides iframe error', e);
+      console.warn('Embedded iframe error', e);
     });
   }
 
-  // subtle sheen overlay
+  // sheen overlay
   const sheen = new THREE.Mesh(planeGeo, new THREE.MeshPhongMaterial({
     color: 0xffffff,
     transparent: true,
@@ -213,7 +230,8 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
   return plane;
 }
 
-// create frames: center = YouTube (click to open modal), left = Slides, right = decorative
+// --- Add frames ---
+// Center frame: YouTube video thumbnail that opens modal when clicked
 createFrame({
   x: 0,
   y: 1.6,
@@ -222,14 +240,16 @@ createFrame({
   title: 'Violin Performance'
 });
 
+// Left frame: embed the local PPTX using Office Online viewer
 createFrame({
   x: -4.2,
   y: 1.6,
   z: -ROOM.depth / 2 + 0.06,
-  title: 'Slides',
-  slidesEmbedUrl: SLIDES_EMBED_URL
+  title: 'CAT TNR Presentation',
+  embedUrl: SLIDES_EMBED_URL
 });
 
+// Right frame: decorative
 createFrame({
   x: 4.2,
   y: 1.6,
@@ -237,9 +257,10 @@ createFrame({
   title: 'Art 2'
 });
 
-// --- Raycasting / clicks (open modal only for YouTube frames) ---
+// --- Raycasting for clicks (open modal only for YouTube frames) ---
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
+
 function onPointerDown(event) {
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -257,10 +278,11 @@ function onPointerDown(event) {
 }
 window.addEventListener('pointerdown', onPointerDown);
 
-// --- Modal (YouTube) ---
+// --- Modal logic ---
 const modal = document.getElementById('video-modal');
 const iframe = document.getElementById('yt-iframe');
 const closeBtn = document.getElementById('close-btn');
+
 function openVideoModal(videoId) {
   if (iframe && modal) {
     iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
@@ -270,6 +292,7 @@ function openVideoModal(videoId) {
     window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank', 'noopener');
   }
 }
+
 function closeVideoModal() {
   if (iframe && modal) {
     iframe.src = '';
@@ -277,12 +300,13 @@ function closeVideoModal() {
     document.body.style.overflow = '';
   }
 }
+
 if (closeBtn) closeBtn.addEventListener('click', closeVideoModal);
 if (modal) modal.addEventListener('click', (e) => {
   if (e.target === modal) closeVideoModal();
 });
 
-// --- Resize: update both renderers and CSS3D container sizes ---
+// --- Resize handling ---
 function onResize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -291,19 +315,17 @@ function onResize() {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 
-  // smaller, safer pixelsPerUnit clamp so iframe doesn't grow too large
+  // Keep iframe containers sized proportional to the frame world size
   const pixelsPerUnit = Math.max(100, Math.min(160, Math.floor(window.devicePixelRatio * 140)));
   cssScene.traverse((child) => {
     if (child instanceof CSS3DObject) {
       const el = child.element;
       el.style.width = Math.round(3.2 * pixelsPerUnit) + 'px';
       el.style.height = Math.round(1.8 * pixelsPerUnit) + 'px';
-      // ensure element's internal iframe fills container
       if (el.firstChild && el.firstChild.tagName === 'IFRAME') {
         el.firstChild.style.width = '100%';
         el.firstChild.style.height = '100%';
       }
-      // enforce max size so nothing expands too far on very large screens
       el.style.maxWidth = Math.round(4.2 * pixelsPerUnit) + 'px';
       el.style.maxHeight = Math.round(2.2 * pixelsPerUnit) + 'px';
     }
@@ -333,6 +355,7 @@ function animate() {
 }
 animate();
 
-// Debug: list CSS3D children so you can verify container presence
+// --- Debugging info ---
+console.log('Office embed URL:', SLIDES_EMBED_URL);
 console.log('cssScene children:', cssScene.children);
 setTimeout(() => console.log('cssScene children after 2s:', cssScene.children), 2000);
