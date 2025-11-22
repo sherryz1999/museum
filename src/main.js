@@ -1,71 +1,36 @@
 // src/main.js
-// Embed local PPTX via Office viewer using raw.githack (so GitHub Pages is NOT required).
-// Set SLIDES_FILE to the filename in the repo root and this script will build a raw.githack URL
-// and then construct the Microsoft Office embed URL that the iframe will load.
-//
-// Notes:
-// - raw.githack serves files from raw.githubusercontent with headers suitable for third-party viewers.
-// - The file must exist in the repository (repo root or a subpath you specify in SLIDES_FILE).
-// - If you preview locally via file:// the Office viewer cannot fetch the file — use a public URL or raw.githack as used here.
-
+// Updated to give the picture frame a more museum-like appearance:
+// - Uses an extruded frame geometry with an inner cutout (mat + opening)
+// - Adds a white matboard (beveled inset) for the thumbnail
+// - Adds a subtle "glass" overlay (transparent, slightly reflective)
+// - Uses a wood-like standard material for the frame (tweakable)
+// - Keeps thumbnail loading and modal logic intact
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
-import { CSS3DRenderer, CSS3DObject } from 'https://unpkg.com/three@0.159.0/examples/jsm/renderers/CSS3DRenderer.js';
 
 const canvasContainer = document.body;
 
 // --- Configuration ---
-// center YouTube video
+// Your YouTube video ID
 const YOUTUBE_VIDEO_ID = 'FXTDo0TEp6Q';
 
-// file in repo root (change to swap)
-const SLIDES_FILE = 'CATTNR.pptx';
+// Room size
+const ROOM = {
+  width: 12,
+  height: 4,
+  depth: 8
+};
 
-// Build an Office embed URL where the PPTX is served via raw.githack.
-// raw.githack URL: https://raw.githack.com/{owner}/{repo}/{branch}/{path}
-// Office embed URL: https://view.officeapps.live.com/op/embed.aspx?src={encoded_raw_githack_url}
-function buildOfficeEmbedUrlViaRawGithack(fileName) {
-  const owner = 'sherryz1999';
-  const repo = 'museum';
-  const branch = 'main';
-
-  // Normalize the path and encode segments (handles spaces and parentheses)
-  const cleaned = fileName.replace(/^\.\//, '').replace(/^\/+/, '');
-  const segments = cleaned.split('/').map(seg => encodeURIComponent(seg));
-  const encodedPath = segments.join('/');
-  const rawGithackUrl = `https://raw.githack.com/${owner}/${repo}/${branch}/${encodedPath}`;
-  const officeEmbed = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(rawGithackUrl);
-
-  console.log('Using raw.githack URL for Office embed:', rawGithackUrl);
-  return officeEmbed;
-}
-
-const SLIDES_EMBED_URL = buildOfficeEmbedUrlViaRawGithack(SLIDES_FILE);
-
-// --- Scene configuration ---
-const ROOM = { width: 12, height: 4, depth: 8 };
-
-// --- WebGL renderer ---
+// --- Renderer ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// --- CSS3D renderer (for interactive iframes) ---
-// Container ignores pointer events; iframe containers will receive events.
-const cssRenderer = new CSS3DRenderer();
-cssRenderer.domElement.style.position = 'absolute';
-cssRenderer.domElement.style.top = '0';
-cssRenderer.domElement.style.left = '0';
-cssRenderer.domElement.style.pointerEvents = 'none';
-cssRenderer.domElement.style.zIndex = '5';
-document.body.appendChild(cssRenderer.domElement);
-
-// --- Scenes & camera ---
+// --- Scene & Camera ---
 const scene = new THREE.Scene();
-const cssScene = new THREE.Scene();
-scene.background = new THREE.Color(0xf8f8f8);
+scene.background = new THREE.Color(0xf8f8f8); // neutral off-white ambient
 
 const camera = new THREE.PerspectiveCamera(60, 2, 0.1, 100);
 camera.position.set(0, 1.6, ROOM.depth / 2 + 1.5);
@@ -84,153 +49,186 @@ scene.add(ambient);
 const dir = new THREE.DirectionalLight(0xffffff, 0.6);
 dir.position.set(-5, ROOM.height * 0.9, 5);
 dir.castShadow = true;
+dir.shadow.camera.left = -10;
+dir.shadow.camera.right = 10;
+dir.shadow.camera.top = 10;
+dir.shadow.camera.bottom = -10;
 dir.shadow.mapSize.set(1024, 1024);
 scene.add(dir);
 
-// --- Room helper ---
+// --- Create room with separate planes so we can color floor/ceiling neutrally ---
 function makePlane(w, h, color) {
   const mat = new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide });
   const geo = new THREE.PlaneGeometry(w, h);
   return new THREE.Mesh(geo, mat);
 }
 
+// Floor (neutral warm gray/beige)
 const floor = makePlane(ROOM.width, ROOM.depth, 0xede6dd);
 floor.rotation.x = -Math.PI / 2;
 floor.position.y = 0;
-floor.receiveShadow = true;
 scene.add(floor);
+floor.receiveShadow = true;
 
+// Ceiling (neutral cool)
 const ceiling = makePlane(ROOM.width, ROOM.depth, 0xf0f0f0);
 ceiling.rotation.x = Math.PI / 2;
 ceiling.position.y = ROOM.height;
 scene.add(ceiling);
 
+// Back wall (where we'll hang the performance)
 const backWall = makePlane(ROOM.width, ROOM.height, 0xffffff);
 backWall.position.z = -ROOM.depth / 2;
 backWall.position.y = ROOM.height / 2;
 scene.add(backWall);
 
+// Front wall
 const frontWall = makePlane(ROOM.width, ROOM.height, 0xffffff);
 frontWall.position.z = ROOM.depth / 2;
 frontWall.rotation.y = Math.PI;
 frontWall.position.y = ROOM.height / 2;
 scene.add(frontWall);
 
+// Left wall
 const leftWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
 leftWall.rotation.y = Math.PI / 2;
 leftWall.position.x = -ROOM.width / 2;
 leftWall.position.y = ROOM.height / 2;
 scene.add(leftWall);
 
+// Right wall
 const rightWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
 rightWall.rotation.y = -Math.PI / 2;
 rightWall.position.x = ROOM.width / 2;
 rightWall.position.y = ROOM.height / 2;
 scene.add(rightWall);
 
-// --- Texture loader ---
+// --- Picture frame with YouTube thumbnail ---
+// We'll construct a museum-like frame using an extruded geometry (outer rectangle with inner hole),
+// add a white mat (thin plane inset), the thumbnail, and a glass overlay.
+
 const loader = new THREE.TextureLoader();
+// hint the browser we want CORS (may help in some environments)
+if (typeof loader.setCrossOrigin === 'function') {
+  try { loader.setCrossOrigin('anonymous'); } catch (e) {}
+}
 loader.crossOrigin = 'anonymous';
 
-// createFrame supports either a YouTube thumbnail or an embedUrl for CSS3D iframe
-function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '', title = '', embedUrl = '' }) {
-  const frameWidth = 3.2;
-  const frameHeight = 1.8;
+function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '', title = '' }) {
+  const openingWidth = 3.2;
+  const openingHeight = 1.8;
+  const frameDepth = 0.08; // extrusion depth
+  const frameBorderThickness = 0.16; // thickness of the visible frame edge
+  const matInset = 0.14; // width of the white mat between frame and thumbnail
+  const outerW = openingWidth + frameBorderThickness * 2;
+  const outerH = openingHeight + frameBorderThickness * 2;
 
-  // border behind the frame
-  const borderGeo = new THREE.BoxGeometry(frameWidth + 0.12, frameHeight + 0.12, 0.08);
-  const borderMat = new THREE.MeshStandardMaterial({ color: 0x2f2f2f });
-  const border = new THREE.Mesh(borderGeo, borderMat);
-  border.position.set(x, y, z - 0.04);
-  border.castShadow = true;
-  scene.add(border);
+  // Create frame shape (outer rectangle with inner hole)
+  const shape = new THREE.Shape();
+  shape.moveTo(-outerW / 2, -outerH / 2);
+  shape.lineTo(-outerW / 2, outerH / 2);
+  shape.lineTo(outerW / 2, outerH / 2);
+  shape.lineTo(outerW / 2, -outerH / 2);
+  shape.lineTo(-outerW / 2, -outerH / 2);
 
-  // main plane (thumbnail or placeholder)
-  const planeGeo = new THREE.PlaneGeometry(frameWidth, frameHeight);
+  // Inner hole (the opening where the mat + thumbnail sit)
+  const hole = new THREE.Path();
+  hole.moveTo(-openingWidth / 2, -openingHeight / 2);
+  hole.lineTo(-openingWidth / 2, openingHeight / 2);
+  hole.lineTo(openingWidth / 2, openingHeight / 2);
+  hole.lineTo(openingWidth / 2, -openingHeight / 2);
+  hole.lineTo(-openingWidth / 2, -openingHeight / 2);
+  shape.holes.push(hole);
+
+  // Extrude the frame to give depth
+  const extrudeSettings = {
+    depth: frameDepth,
+    bevelEnabled: true,
+    bevelThickness: 0.012,
+    bevelSize: 0.01,
+    bevelSegments: 2,
+    steps: 1
+  };
+  const frameGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
+  // Recenter geometry so the front face sits at z = 0
+  frameGeo.translate(0, 0, -frameDepth / 2);
+
+  // Frame material - wood-like
+  const frameMat = new THREE.MeshStandardMaterial({
+    color: 0x6b452b, // warm wood color
+    roughness: 0.6,
+    metalness: 0.05
+  });
+
+  const frameMesh = new THREE.Mesh(frameGeo, frameMat);
+  frameMesh.castShadow = true;
+  frameMesh.receiveShadow = true;
+  frameMesh.position.set(x, y, z - frameDepth / 2); // push slightly into the wall
+  scene.add(frameMesh);
+
+  // Add inner mat (thin white inset) - sits slightly in front of the frame opening
+  const matWidth = openingWidth - matInset * 2;
+  const matHeight = openingHeight - matInset * 2;
+  const matGeo = new THREE.PlaneGeometry(matWidth, matHeight);
+  const matMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+  const matMesh = new THREE.Mesh(matGeo, matMat);
+  matMesh.position.set(x, y, z + 0.005); // slightly in front of the frame face
+  scene.add(matMesh);
+
+  // Add thumbnail plane (the actual image) slightly in front of the mat
+  const thumbUrl = videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : '';
   const placeholder = new THREE.MeshBasicMaterial({ color: 0x111111 });
-  const plane = new THREE.Mesh(planeGeo, placeholder);
-  plane.position.set(x, y, z);
-  plane.userData = { type: 'video-frame', videoId, title, embedUrl };
-  plane.receiveShadow = true;
-  plane.castShadow = true;
-  scene.add(plane);
+  const thumbGeo = new THREE.PlaneGeometry(matWidth - 0.02, matHeight - 0.02);
+  const thumbMesh = new THREE.Mesh(thumbGeo, placeholder);
+  thumbMesh.position.set(x, y, z + 0.01); // in front of mat
+  thumbMesh.userData = { type: 'video-frame', videoId, title };
+  thumbMesh.castShadow = true;
+  thumbMesh.receiveShadow = true;
+  scene.add(thumbMesh);
 
-  // If YouTube id provided, load thumbnail
-  if (videoId) {
-    const thumbUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+  if (videoId && thumbUrl) {
     loader.load(
       thumbUrl,
       (tex) => {
-        plane.material = new THREE.MeshBasicMaterial({ map: tex });
-        plane.material.needsUpdate = true;
+        tex.encoding = THREE.sRGBEncoding;
+        thumbMesh.material = new THREE.MeshBasicMaterial({ map: tex });
+        thumbMesh.material.needsUpdate = true;
       },
       undefined,
-      () => {}
+      () => {
+        // keep placeholder if thumbnail fails
+      }
     );
   }
 
-  // If embedUrl provided (Office viewer via raw.githack), create a constrained container and add iframe
-  if (embedUrl) {
-    // pixelsPerUnit controls pixel footprint; clamped to avoid huge iframes on high DPI
-    const pixelsPerUnit = Math.max(100, Math.min(160, Math.floor(window.devicePixelRatio * 140)));
-    const pxW = Math.round(frameWidth * pixelsPerUnit);
-    const pxH = Math.round(frameHeight * pixelsPerUnit);
-
-    const container = document.createElement('div');
-    container.style.width = pxW + 'px';
-    container.style.height = pxH + 'px';
-    container.style.overflow = 'hidden';
-    container.style.pointerEvents = 'auto';
-    container.style.boxSizing = 'border-box';
-    container.style.position = 'relative';
-    container.style.background = '#000';
-    container.style.borderRadius = '2px';
-    container.style.boxShadow = '0 6px 18px rgba(0,0,0,0.25)';
-
-    const iframe = document.createElement('iframe');
-    iframe.src = embedUrl;
-    iframe.style.width = '100%';
-    iframe.style.height = '100%';
-    iframe.style.border = '0';
-    iframe.style.display = 'block';
-    iframe.allow = 'autoplay; encrypted-media; fullscreen';
-    iframe.setAttribute('allowfullscreen', '');
-    iframe.style.pointerEvents = 'auto';
-
-    container.appendChild(iframe);
-
-    const cssObject = new CSS3DObject(container);
-    cssObject.position.set(x, y, z + 0.02);
-    cssObject.rotation.copy(plane.rotation);
-    cssScene.add(cssObject);
-
-    plane.userData.cssObject = cssObject;
-    plane.userData.cssContainer = container;
-    plane.userData.iframe = iframe;
-
-    iframe.addEventListener('load', () => {
-      console.log('Embedded file iframe loaded:', embedUrl);
-    });
-    iframe.addEventListener('error', (e) => {
-      console.warn('Embedded iframe error', e);
-    });
-  }
-
-  // sheen overlay
-  const sheen = new THREE.Mesh(planeGeo, new THREE.MeshPhongMaterial({
+  // Add a subtle glass overlay - thin transparent plane to emulate glazing
+  const glassMat = new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
+    metalness: 0,
+    roughness: 0.25,
     transparent: true,
-    opacity: 0.03
-  }));
-  sheen.position.set(x, y, z + 0.001);
-  scene.add(sheen);
+    opacity: 0.08,
+    reflectivity: 0.2,
+    clearcoat: 0.1
+  });
+  const glassMesh = new THREE.Mesh(thumbGeo.clone(), glassMat);
+  glassMesh.position.set(x, y, z + 0.017);
+  scene.add(glassMesh);
 
-  return plane;
+  // Slight decorative fillet on outer frame edge: add a subtle rim (narrow box)
+  const rimGeo = new THREE.BoxGeometry(outerW + 0.002, outerH + 0.002, 0.004);
+  const rimMat = new THREE.MeshStandardMaterial({ color: 0x2c1f17, roughness: 0.7 });
+  const rimMesh = new THREE.Mesh(rimGeo, rimMat);
+  rimMesh.position.set(x, y, z - frameDepth / 2 - 0.002);
+  scene.add(rimMesh);
+
+  // Grouping would be nice but return the thumbnail mesh so click detection still works
+  return thumbMesh;
 }
 
-// --- Add frames ---
-// Center: YouTube thumbnail
-createFrame({
+// Add a single large frame centered on the back wall
+const mainFrame = createFrame({
   x: 0,
   y: 1.6,
   z: -ROOM.depth / 2 + 0.06,
@@ -238,24 +236,11 @@ createFrame({
   title: 'Violin Performance'
 });
 
-// Left: embed local PPTX via Office viewer using raw.githack
-createFrame({
-  x: -4.2,
-  y: 1.6,
-  z: -ROOM.depth / 2 + 0.06,
-  title: 'CATTNR Presentation',
-  embedUrl: SLIDES_EMBED_URL
-});
+// Add a couple of smaller framed decorations (no videos)
+createFrame({ x: -4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, videoId: '', title: 'Art 1' });
+createFrame({ x: 4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, videoId: '', title: 'Art 2' });
 
-// Right: decorative
-createFrame({
-  x: 4.2,
-  y: 1.6,
-  z: -ROOM.depth / 2 + 0.06,
-  title: 'Art 2'
-});
-
-// --- Raycasting / clicks (only open modal for YouTube frames) ---
+// --- Raycasting for clicks ---
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
@@ -276,81 +261,66 @@ function onPointerDown(event) {
 }
 window.addEventListener('pointerdown', onPointerDown);
 
-// --- Modal logic for YouTube ---
+// --- Modal logic to show YouTube embed ---
 const modal = document.getElementById('video-modal');
-const ytIframe = document.getElementById('yt-iframe');
+const iframe = document.getElementById('yt-iframe');
 const closeBtn = document.getElementById('close-btn');
 
 function openVideoModal(videoId) {
-  if (ytIframe && modal) {
-    ytIframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+  if (iframe && modal) {
+    iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
     modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
   } else {
+    // fallback: open direct YouTube link in new tab
     window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank', 'noopener');
   }
 }
 
 function closeVideoModal() {
-  if (ytIframe && modal) {
-    ytIframe.src = '';
+  if (iframe && modal) {
+    iframe.src = '';
     modal.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
   }
 }
+
 if (closeBtn) closeBtn.addEventListener('click', closeVideoModal);
 if (modal) modal.addEventListener('click', (e) => {
   if (e.target === modal) closeVideoModal();
 });
 
-// --- Resize handling ---
+// --- Resize ---
 function onResize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   renderer.setSize(w, h);
-  cssRenderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-
-  const pixelsPerUnit = Math.max(100, Math.min(160, Math.floor(window.devicePixelRatio * 140)));
-  cssScene.traverse((child) => {
-    if (child instanceof CSS3DObject) {
-      const el = child.element;
-      el.style.width = Math.round(3.2 * pixelsPerUnit) + 'px';
-      el.style.height = Math.round(1.8 * pixelsPerUnit) + 'px';
-      if (el.firstChild && el.firstChild.tagName === 'IFRAME') {
-        el.firstChild.style.width = '100%';
-        el.firstChild.style.height = '100%';
-      }
-      el.style.maxWidth = Math.round(4.2 * pixelsPerUnit) + 'px';
-      el.style.maxHeight = Math.round(2.2 * pixelsPerUnit) + 'px';
-    }
-  });
-
-  cssRenderer.domElement.style.zIndex = 5;
-  renderer.domElement.style.zIndex = 1;
 }
 window.addEventListener('resize', onResize);
 onResize();
 
 // --- Animation loop ---
+const clock = new THREE.Clock();
+
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
 
+  // subtle float for frames (stylistic)
   const t = performance.now() * 0.0002;
   scene.traverse((o) => {
     if (o.userData && o.userData.type === 'video-frame') {
-      o.rotation.z = Math.sin(t + (o.position.x || 0)) * 0.002;
+      o.rotation.z = Math.sin(t + o.position.x) * 0.002;
     }
   });
 
   renderer.render(scene, camera);
-  cssRenderer.render(cssScene, camera);
 }
 animate();
 
-// --- Debug logs ---
-console.log('Office embed URL:', SLIDES_EMBED_URL);
-console.log('cssScene children:', cssScene.children);
-setTimeout(() => console.log('cssScene children after 2s:', cssScene.children), 2000);
+// --- Helper: show a friendly console message if the video id wasn't replaced ---
+if (!YOUTUBE_VIDEO_ID || YOUTUBE_VIDEO_ID === 'REPLACE_WITH_VIDEO_ID') {
+  console.warn('No YouTube video ID configured. Open src/main.js and set YOUTUBE_VIDEO_ID to your video ID.');
+}
