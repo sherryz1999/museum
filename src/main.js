@@ -202,7 +202,7 @@ createFrame({ x: -4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, ope
 const portraitCount = PORTRAIT_FILES.length;
 if (portraitCount > 0) {
   const padding = 0.6; // avoid corners
-  const usableDepth = ROOM.depth - padding * 2;
+  const usableDepth = ROOM.depth - padding * 2 - GAP_WORLD_UNITS * 2;
   const segment = portraitCount === 1 ? 0 : usableDepth / (portraitCount - 1); // if only one, place at center
   const portraitFrameDepth = 0.06;
 
@@ -214,7 +214,7 @@ if (portraitCount > 0) {
 
   for (let i = 0; i < portraitCount; i++) {
     const file = PORTRAIT_FILES[i];
-    const z = -ROOM.depth / 2 + GAP_WORLD_UNITS + segment * i;
+    const z = -ROOM.depth / 2 + 0.06 + segment * i;
     const imageUrl = new URL(file, window.location.href).href;
 
     const mesh = createFrame({
