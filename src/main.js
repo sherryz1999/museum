@@ -1,14 +1,6 @@
 // src/main.js
-// Museum scene — place 3 portraits centered vertically and evenly spaced horizontally on the left wall.
-// Also add click-to-enlarge modal for portraits (created dynamically).
-//
-// Key changes:
-// - Portraits Y coordinate set to the wall middle (ROOM.height / 2) to align horizontally.
-// - Portraits are evenly spaced along the left wall (equal z spacing).
-// - Each portrait userData stores imageUrl so clicks can open a large modal image.
-// - A lightweight image modal (overlay) is created and managed in this script (no HTML file edits required).
-//
-// Serve over HTTP (python -m http.server) or via GitHub Pages to allow textures to load.
+// Museum scene — portrait alignment, image loading, and click-to-enlarge modal.
+// Bugfix: avoid duplicate `closeBtn` declaration by renaming the image-modal close button to `imgModalCloseBtn`.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -271,9 +263,10 @@ Object.assign(imgEl.style, {
   objectFit: 'contain',
   background: '#000'
 });
-const closeBtn = document.createElement('button');
-closeBtn.innerText = '×';
-Object.assign(closeBtn.style, {
+// renamed the image-modal close button variable to avoid collision with other `closeBtn`
+const imgModalCloseBtn = document.createElement('button');
+imgModalCloseBtn.innerText = '×';
+Object.assign(imgModalCloseBtn.style, {
   position: 'absolute',
   top: '18px',
   right: '22px',
@@ -288,7 +281,7 @@ Object.assign(closeBtn.style, {
 // Append elements
 imgContainer.appendChild(imgEl);
 imgModal.appendChild(imgContainer);
-imgModal.appendChild(closeBtn);
+imgModal.appendChild(imgModalCloseBtn);
 document.body.appendChild(imgModal);
 
 function openImageModal(src, alt = '') {
@@ -301,7 +294,7 @@ function closeImageModal() {
   imgModal.style.display = 'none';
   imgEl.src = '';
 }
-closeBtn.addEventListener('click', closeImageModal);
+imgModalCloseBtn.addEventListener('click', closeImageModal);
 imgModal.addEventListener('click', (e) => {
   if (e.target === imgModal) closeImageModal();
 });
