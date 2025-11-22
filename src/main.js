@@ -207,7 +207,7 @@ if (portraitCount > 0) {
   const portraitFrameDepth = 0.06;
 
   // X coordinate just in front of left wall with GAP_WORLD_UNITS offset
-  const leftX = -ROOM.width / 2 + GAP_WORLD_UNITS + portraitFrameDepth / 2;
+  const leftX = -ROOM.depth / 2 + GAP_WORLD_UNITS + portraitFrameDepth / 2;
 
   // Y set to wall middle
   const portraitY = ROOM.height / 2;
