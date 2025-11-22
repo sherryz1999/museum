@@ -1,14 +1,12 @@
 // src/main.js
-// Updated to embed a local PPTX file (CATTNR.pptx) in the left frame
-// using the Microsoft Office Online embed viewer. The file is expected to live in the repo (museum root).
+// Embed local PPTX via Office viewer using raw.githack (so GitHub Pages is NOT required).
+// Set SLIDES_FILE to the filename in the repo root and this script will build a raw.githack URL
+// and then construct the Microsoft Office embed URL that the iframe will load.
 //
-// How it works:
-// - Set SLIDES_FILE to the file name in the project (easy to swap).
-// - The script builds an absolute URL to that file (relative to the current page) and then
-//   constructs the Office viewer embed URL:
-//     https://view.officeapps.live.com/op/embed.aspx?src={urlencoded_file_url}
-// - Note: the Office viewer requires the file to be publicly accessible (GitHub Pages, raw.githubusercontent, or any public URL).
-//   If you preview locally via file:// the viewer will not work. Publish the repo with GitHub Pages or serve over HTTP.
+// Notes:
+// - raw.githack serves files from raw.githubusercontent with headers suitable for third-party viewers.
+// - The file must exist in the repository (repo root or a subpath you specify in SLIDES_FILE).
+// - If you preview locally via file:// the Office viewer cannot fetch the file — use a public URL or raw.githack as used here.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -17,31 +15,35 @@ import { CSS3DRenderer, CSS3DObject } from 'https://unpkg.com/three@0.159.0/exam
 const canvasContainer = document.body;
 
 // --- Configuration ---
-// YouTube video ID for main (center) frame:
+// center YouTube video
 const YOUTUBE_VIDEO_ID = 'FXTDo0TEp6Q';
 
-// File placed in the repository (museum root). Change this to swap files easily.
+// file in repo root (change to swap)
 const SLIDES_FILE = 'CATTNR.pptx';
 
-// Build an absolute URL to the file relative to the current page, then an Office embed URL.
-// Example resulting embed URL:
-// https://view.officeapps.live.com/op/embed.aspx?src=https%3A%2F%2Fsherryz1999.github.io%2Fmuseum%2FCATTNR.pptx
-function buildOfficeEmbedUrl(fileName) {
-  // create a relative URL resolved against the current page
-  // encodeURI will preserve path separators while encoding spaces/parentheses
-  const relative = './' + encodeURI(fileName);
-  const absoluteFileUrl = new URL(relative, window.location.href).href;
-  const officeEmbed = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(absoluteFileUrl);
+// Build an Office embed URL where the PPTX is served via raw.githack.
+// raw.githack URL: https://raw.githack.com/{owner}/{repo}/{branch}/{path}
+// Office embed URL: https://view.officeapps.live.com/op/embed.aspx?src={encoded_raw_githack_url}
+function buildOfficeEmbedUrlViaRawGithack(fileName) {
+  const owner = 'sherryz1999';
+  const repo = 'museum';
+  const branch = 'main';
+
+  // Normalize the path and encode segments (handles spaces and parentheses)
+  const cleaned = fileName.replace(/^\.\//, '').replace(/^\/+/, '');
+  const segments = cleaned.split('/').map(seg => encodeURIComponent(seg));
+  const encodedPath = segments.join('/');
+  const rawGithackUrl = `https://raw.githack.com/${owner}/${repo}/${branch}/${encodedPath}`;
+  const officeEmbed = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(rawGithackUrl);
+
+  console.log('Using raw.githack URL for Office embed:', rawGithackUrl);
   return officeEmbed;
 }
 
-const SLIDES_EMBED_URL = buildOfficeEmbedUrl(SLIDES_FILE);
+const SLIDES_EMBED_URL = buildOfficeEmbedUrlViaRawGithack(SLIDES_FILE);
 
-const ROOM = {
-  width: 12,
-  height: 4,
-  depth: 8
-};
+// --- Scene configuration ---
+const ROOM = { width: 12, height: 4, depth: 8 };
 
 // --- WebGL renderer ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -50,12 +52,13 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// --- CSS3D renderer for iframes ---
+// --- CSS3D renderer (for interactive iframes) ---
+// Container ignores pointer events; iframe containers will receive events.
 const cssRenderer = new CSS3DRenderer();
 cssRenderer.domElement.style.position = 'absolute';
 cssRenderer.domElement.style.top = '0';
 cssRenderer.domElement.style.left = '0';
-cssRenderer.domElement.style.pointerEvents = 'none'; // container won't capture events; iframe containers will
+cssRenderer.domElement.style.pointerEvents = 'none';
 cssRenderer.domElement.style.zIndex = '5';
 document.body.appendChild(cssRenderer.domElement);
 
@@ -91,7 +94,6 @@ function makePlane(w, h, color) {
   return new THREE.Mesh(geo, mat);
 }
 
-// floor, ceiling, walls
 const floor = makePlane(ROOM.width, ROOM.depth, 0xede6dd);
 floor.rotation.x = -Math.PI / 2;
 floor.position.y = 0;
@@ -126,16 +128,16 @@ rightWall.position.x = ROOM.width / 2;
 rightWall.position.y = ROOM.height / 2;
 scene.add(rightWall);
 
-// --- Loader ---
+// --- Texture loader ---
 const loader = new THREE.TextureLoader();
 loader.crossOrigin = 'anonymous';
 
-// createFrame supports either a YouTube video thumbnail or an embedded iframe (CSS3D).
+// createFrame supports either a YouTube thumbnail or an embedUrl for CSS3D iframe
 function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '', title = '', embedUrl = '' }) {
   const frameWidth = 3.2;
   const frameHeight = 1.8;
 
-  // frame border (simple box behind the display)
+  // border behind the frame
   const borderGeo = new THREE.BoxGeometry(frameWidth + 0.12, frameHeight + 0.12, 0.08);
   const borderMat = new THREE.MeshStandardMaterial({ color: 0x2f2f2f });
   const border = new THREE.Mesh(borderGeo, borderMat);
@@ -143,7 +145,7 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
   border.castShadow = true;
   scene.add(border);
 
-  // visible display plane
+  // main plane (thumbnail or placeholder)
   const planeGeo = new THREE.PlaneGeometry(frameWidth, frameHeight);
   const placeholder = new THREE.MeshBasicMaterial({ color: 0x111111 });
   const plane = new THREE.Mesh(planeGeo, placeholder);
@@ -153,7 +155,7 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
   plane.castShadow = true;
   scene.add(plane);
 
-  // If YouTube ID provided, load its thumbnail
+  // If YouTube id provided, load thumbnail
   if (videoId) {
     const thumbUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
     loader.load(
@@ -167,10 +169,9 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
     );
   }
 
-  // If an embedUrl is provided, create a constrained container div and add an iframe inside,
-  // then convert to a CSS3DObject positioned exactly in front of the plane.
+  // If embedUrl provided (Office viewer via raw.githack), create a constrained container and add iframe
   if (embedUrl) {
-    // pixelsPerUnit determines pixel footprint: tune to your liking
+    // pixelsPerUnit controls pixel footprint; clamped to avoid huge iframes on high DPI
     const pixelsPerUnit = Math.max(100, Math.min(160, Math.floor(window.devicePixelRatio * 140)));
     const pxW = Math.round(frameWidth * pixelsPerUnit);
     const pxH = Math.round(frameHeight * pixelsPerUnit);
@@ -179,7 +180,7 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
     container.style.width = pxW + 'px';
     container.style.height = pxH + 'px';
     container.style.overflow = 'hidden';
-    container.style.pointerEvents = 'auto'; // allow interaction inside this container
+    container.style.pointerEvents = 'auto';
     container.style.boxSizing = 'border-box';
     container.style.position = 'relative';
     container.style.background = '#000';
@@ -198,7 +199,6 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
 
     container.appendChild(iframe);
 
-    // CSS3DObject from the container
     const cssObject = new CSS3DObject(container);
     cssObject.position.set(x, y, z + 0.02);
     cssObject.rotation.copy(plane.rotation);
@@ -229,7 +229,7 @@ function createFrame({ x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01, videoId = '',
 }
 
 // --- Add frames ---
-// Center frame: YouTube video thumbnail that opens modal when clicked
+// Center: YouTube thumbnail
 createFrame({
   x: 0,
   y: 1.6,
@@ -238,16 +238,16 @@ createFrame({
   title: 'Violin Performance'
 });
 
-// Left frame: embed the local PPTX using Office Online viewer
+// Left: embed local PPTX via Office viewer using raw.githack
 createFrame({
   x: -4.2,
   y: 1.6,
   z: -ROOM.depth / 2 + 0.06,
-  title: 'CAT TNR Presentation',
+  title: 'CATTNR Presentation',
   embedUrl: SLIDES_EMBED_URL
 });
 
-// Right frame: decorative
+// Right: decorative
 createFrame({
   x: 4.2,
   y: 1.6,
@@ -255,7 +255,7 @@ createFrame({
   title: 'Art 2'
 });
 
-// --- Raycasting for clicks (open modal only for YouTube frames) ---
+// --- Raycasting / clicks (only open modal for YouTube frames) ---
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
@@ -276,14 +276,14 @@ function onPointerDown(event) {
 }
 window.addEventListener('pointerdown', onPointerDown);
 
-// --- Modal logic ---
+// --- Modal logic for YouTube ---
 const modal = document.getElementById('video-modal');
-const iframe = document.getElementById('yt-iframe');
+const ytIframe = document.getElementById('yt-iframe');
 const closeBtn = document.getElementById('close-btn');
 
 function openVideoModal(videoId) {
-  if (iframe && modal) {
-    iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+  if (ytIframe && modal) {
+    ytIframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
     modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
   } else {
@@ -292,13 +292,12 @@ function openVideoModal(videoId) {
 }
 
 function closeVideoModal() {
-  if (iframe && modal) {
-    iframe.src = '';
+  if (ytIframe && modal) {
+    ytIframe.src = '';
     modal.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
   }
 }
-
 if (closeBtn) closeBtn.addEventListener('click', closeVideoModal);
 if (modal) modal.addEventListener('click', (e) => {
   if (e.target === modal) closeVideoModal();
@@ -313,7 +312,6 @@ function onResize() {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 
-  // Keep iframe containers sized proportional to the frame world size
   const pixelsPerUnit = Math.max(100, Math.min(160, Math.floor(window.devicePixelRatio * 140)));
   cssScene.traverse((child) => {
     if (child instanceof CSS3DObject) {
@@ -340,7 +338,6 @@ function animate() {
   requestAnimationFrame(animate);
   controls.update();
 
-  // gentle float
   const t = performance.now() * 0.0002;
   scene.traverse((o) => {
     if (o.userData && o.userData.type === 'video-frame') {
@@ -353,7 +350,7 @@ function animate() {
 }
 animate();
 
-// --- Debugging info ---
+// --- Debug logs ---
 console.log('Office embed URL:', SLIDES_EMBED_URL);
 console.log('cssScene children:', cssScene.children);
 setTimeout(() => console.log('cssScene children after 2s:', cssScene.children), 2000);
