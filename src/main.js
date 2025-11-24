@@ -1,13 +1,13 @@
 // src/main.js
 // Based on commit 9860a90: Emerald exterior theme + door + portraits + PDF on right wall.
-// Change: embed the PDF using PDF.js viewer (mozilla.github.io/pdf.js) with fit-to-width mode,
-// so the PDF is rendered inside the CSS3D iframe and automatically fits the CSS container.
-// Fallback: if the PDF.js viewer isn't reachable, the iframe will still show the raw PDF (browser PDF UI).
+// Change: use Google Docs Viewer as the PDF viewer (embedded) so the PDF is shown with fit and controls:
+//
+// iframe src = "https://docs.google.com/gview?url={PDF_URL}&embedded=true"
 //
 // Notes:
-// - Uses the PDF.js hosted viewer at https://mozilla.github.io/pdf.js/web/viewer.html?file={url}#zoom=page-width
-//   which supports a fit (page-width) behavior via the hash parameter.
-// - The CSS3D iframe container is constrained via px-per-world-unit + viewport caps so it fits the wall frame.
+// - Google Docs Viewer sometimes blocks hotlinked PDFs depending on the remote server/CORS.
+// - If Google blocks embedding, the iframe will show an error; in that case we can fall back to PDF.js or raw PDF.
+// - After you paste/commit this file, reload the page and test the PDF embed. If Google blocks it, tell me and I'll switch to the local PDF.js viewer option.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -271,8 +271,8 @@ pdfBacking.receiveShadow = true;
 pdfBacking.castShadow = false;
 scene.add(pdfBacking);
 
-// Create the CSS3D iframe container and CSS3DObject using PDF.js viewer (fit-to-width)
-function createPdfCssObjectWithPdfJs(url, widthWorld, heightWorld) {
+// Create the CSS3D iframe container and CSS3DObject using Google Docs Viewer (embedded)
+function createPdfCssObjectWithGoogleDocs(url, widthWorld, heightWorld) {
   const el = document.createElement('div');
 
   // compute pixels per world unit (clamped) to keep sizes sensible across devices
@@ -290,23 +290,17 @@ function createPdfCssObjectWithPdfJs(url, widthWorld, heightWorld) {
   el.style.pointerEvents = 'auto';
   el.style.boxSizing = 'border-box';
 
-  // keep a responsive cap so the iframe can't be larger than a reasonable portion of viewport
+  // responsive caps so the iframe can't be larger than a reasonable portion of viewport
   const maxW = Math.round(window.innerWidth * 0.6); // at most 60% viewport width
   const maxH = Math.round(window.innerHeight * 0.72); // at most 72% viewport height
   el.style.maxWidth = maxW + 'px';
   el.style.maxHeight = maxH + 'px';
 
-  // Use PDF.js hosted viewer with fit-to-width param (#zoom=page-width)
-  // viewerBase is the hosted PDF.js web viewer; we pass the file URL as query param
-  const viewerBase = 'https://mozilla.github.io/pdf.js/web/viewer.html';
-  // Some browsers / CDNs may block embedding the hosted viewer via iframe; if so, the raw PDF is fallback.
+  // Build the Google Docs Viewer URL (embedded)
+  const gviewUrl = `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
+
   const iframe = document.createElement('iframe');
-
-  // Build the PDF.js viewer URL, instruct it to fit page width
-  // encode URL for query param then append hash '#zoom=page-width' for fit behavior
-  const pdfJsUrl = `${viewerBase}?file=${encodeURIComponent(url)}#zoom=page-width`;
-
-  iframe.src = pdfJsUrl;
+  iframe.src = gviewUrl;
   iframe.style.width = '100%';
   iframe.style.height = '100%';
   iframe.style.border = '0';
@@ -314,32 +308,14 @@ function createPdfCssObjectWithPdfJs(url, widthWorld, heightWorld) {
   iframe.allow = 'fullscreen';
   iframe.setAttribute('allowfullscreen', '');
 
-  // If PDF.js viewer is blocked (e.g., CSP), we leave iframe.src as-is; the browser may show an error or fallback.
-  // As a safety fallback, also attach a small onerror handler that swaps to Google Docs Viewer after a short delay.
-  // Note: iframe.onerror may not fire for cross-origin frames in some browsers, so we also use a timeout check.
-  let fallbackTimeout = setTimeout(() => {
-    // after 2.5s, if iframe didn't load (still in about:blank or blocked), switch to Google Docs viewer fallback
-    try {
-      // try to access contentWindow.location.href — will throw if cross-origin but that's fine
-      // Instead, check readyState via message passing is complex; we keep a best-effort fallback:
-      // Switch to Google Docs Viewer fallback URL:
-      iframe.src = `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
-    } catch (e) {
-      iframe.src = `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
-    }
-  }, 2500);
-
-  // If iframe loads quickly, clear fallback
-  iframe.onload = () => {
-    clearTimeout(fallbackTimeout);
-  };
-
+  // append
   el.appendChild(iframe);
 
   const cssObj = new CSS3DObject(el);
   cssObj.userData.widthWorld = widthWorld;
   cssObj.userData.heightWorld = heightWorld;
   cssObj.userData.pixelsPerUnit = pixelsPerUnit;
+  cssObj.element = el;
 
   // position the CSS3DObject in world space at same location as pdfBacking
   cssObj.position.copy(pdfBacking.position);
@@ -347,12 +323,10 @@ function createPdfCssObjectWithPdfJs(url, widthWorld, heightWorld) {
   // nudge slightly in front so it's visible
   cssObj.position.x += 0.01;
 
-  // store element reference for resize updates
-  cssObj.element = el;
   return cssObj;
 }
 
-const pdfCss = createPdfCssObjectWithPdfJs(PDF_URL, PDF_W, PDF_H);
+const pdfCss = createPdfCssObjectWithGoogleDocs(PDF_URL, PDF_W, PDF_H);
 cssScene.add(pdfCss);
 
 // Update function to resize css objects when window changes (keeps iframe from growing too large)
@@ -522,5 +496,5 @@ function animate() {
 animate();
 
 // --- Helpful logs ---
-console.log('Embedded PDF via PDF.js viewer on right wall at', PDF_URL);
-console.log('If the hosted PDF.js viewer is blocked by CSP, the code will fall back to Google Docs Viewer.');
+console.log('Embedded PDF via Google Docs Viewer on right wall at', PDF_URL);
+console.log('If Google blocks embedding, tell me and I can switch to a local PDF.js viewer instead.');
