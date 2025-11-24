@@ -1,10 +1,6 @@
 // src/main.js
 // Minimal museum scene (fresh start) with the provided Google Slides iframe embedded
 // on the right wall at pixel size 94x100 using CSS3DRenderer.
-//
-// Embed (user-provided):
-// <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vT0SUWPd9MwElcdH1FiH5AcQ8_oiqvHqg4xa_tnSB9lVh34-TzYnae4Ji5jPj_XLQ/pubembed?start=true&loop=false&delayms=3000"
-//         frameborder="0" width="94" height="100" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe>
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -28,6 +24,9 @@ cssRenderer.domElement.style.left = '0';
 cssRenderer.domElement.style.zIndex = '5';
 cssRenderer.domElement.style.pointerEvents = 'none';
 document.body.appendChild(cssRenderer.domElement);
+
+// --- Fix: create cssScene for CSS3D objects ---
+const cssScene = new THREE.Scene();
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xf8f8f8);
