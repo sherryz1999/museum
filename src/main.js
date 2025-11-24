@@ -233,7 +233,7 @@ if (portraitCount > 0) {
 
   for (let i = 0; i < portraitCount; i++) {
     const file = PORTRAIT_FILES[i];
-    const z = -ROOM.depth / 2 + padding*2  + segment * i;
+    const z = -ROOM.depth / 2 + padding + GAP_WORLD_UNITS + segment * i;
     const imageUrl = new URL(file, window.location.href).href;
     const mesh = createFrame({
       x: leftX, y: portraitY, z: z,
