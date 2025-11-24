@@ -1,13 +1,10 @@
 // src/main.js
 // Based on commit 9860a90: Emerald exterior theme + door + portraits + PDF on right wall.
-// Change: use Google Docs Viewer as the PDF viewer (embedded) so the PDF is shown with fit and controls:
+// Change: embed a Google Slides published presentation in the right-wall iframe.
+// The slides URL (published) provided by you is used directly so the presentation fits the CSS3D container.
 //
-// iframe src = "https://docs.google.com/gview?url={PDF_URL}&embedded=true"
-//
-// Notes:
-// - Google Docs Viewer sometimes blocks hotlinked PDFs depending on the remote server/CORS.
-// - If Google blocks embedding, the iframe will show an error; in that case we can fall back to PDF.js or raw PDF.
-// - After you paste/commit this file, reload the page and test the PDF embed. If Google blocks it, tell me and I'll switch to the local PDF.js viewer option.
+// Slides URL used:
+// https://docs.google.com/presentation/d/e/2PACX-1vT0SUWPd9MwElcdH1FiH5AcQ8_oiqvHqg4xa_tnSB9lVh34-TzYnae4Ji5jPj_XLQ/pub?start=false&loop=false&delayms=3000
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -36,12 +33,12 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// --- CSS3D renderer for iframes/pdf embeds ---
+// --- CSS3D renderer for iframes/pdf/slides embeds ---
 const cssRenderer = new CSS3DRenderer();
 cssRenderer.domElement.style.position = 'absolute';
 cssRenderer.domElement.style.top = '0';
 cssRenderer.domElement.style.left = '0';
-cssRenderer.domElement.style.pointerEvents = 'none'; // outer canvas ignores pointer events; iframe containers will receive events
+cssRenderer.domElement.style.pointerEvents = 'none'; // outer canvas ignores pointer events; individual iframe containers receive events
 cssRenderer.domElement.style.zIndex = '5';
 document.body.appendChild(cssRenderer.domElement);
 
@@ -252,27 +249,27 @@ knob.position.set(DOOR_WIDTH - 0.22, 0, 0.03); doorMesh.add(knob);
 let doorOpen = false; let doorTargetRotation = 0; const DOOR_OPEN_ANGLE = -Math.PI / 2 + 0.05;
 function toggleDoor() { doorOpen = !doorOpen; doorTargetRotation = doorOpen ? DOOR_OPEN_ANGLE : 0; }
 
-// --- PDF embed on the RIGHT wall (middle) ---
-// PDF URL (served from your GitHub Pages)
-const PDF_URL = 'https://sherryz1999.github.io/museum/CatFoodDrive.pdf';
+// --- Google Slides embed on the RIGHT wall (middle) ---
+// Use the published Google Slides presentation URL (user-provided)
+const SLIDES_URL = 'https://docs.google.com/presentation/d/e/2PACX-1vT0SUWPd9MwElcdH1FiH5AcQ8_oiqvHqg4xa_tnSB9lVh34-TzYnae4Ji5jPj_XLQ/pub?start=false&loop=false&delayms=3000';
 
-// PDF frame world dimensions (match a frame size)
-const PDF_W = 3.2;   // world units width
-const PDF_H = 2.0;   // world units height
-const pdfFrameDepth = 0.06;
+// Frame world dimensions
+const SLIDES_W = 3.2;
+const SLIDES_H = 2.0;
+const slidesFrameDepth = 0.06;
 
-// Create a thin WebGL backing frame for look (optional)
-const pdfBackingMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 });
-const pdfBackingGeo = new THREE.PlaneGeometry(PDF_W, PDF_H);
-const pdfBacking = new THREE.Mesh(pdfBackingGeo, pdfBackingMat);
-pdfBacking.position.set(ROOM.width / 2 - (pdfFrameDepth / 2 + 0.02), ROOM.height / 2, 0); // flush to right wall interior
-pdfBacking.rotation.y = -Math.PI / 2;
-pdfBacking.receiveShadow = true;
-pdfBacking.castShadow = false;
-scene.add(pdfBacking);
+// Backing panel (WebGL) to sit behind the iframe
+const slidesBackingMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 });
+const slidesBackingGeo = new THREE.PlaneGeometry(SLIDES_W, SLIDES_H);
+const slidesBacking = new THREE.Mesh(slidesBackingGeo, slidesBackingMat);
+slidesBacking.position.set(ROOM.width / 2 - (slidesFrameDepth / 2 + 0.02), ROOM.height / 2, 0); // flush to right wall interior
+slidesBacking.rotation.y = -Math.PI / 2;
+slidesBacking.receiveShadow = true;
+slidesBacking.castShadow = false;
+scene.add(slidesBacking);
 
-// Create the CSS3D iframe container and CSS3DObject using Google Docs Viewer (embedded)
-function createPdfCssObjectWithGoogleDocs(url, widthWorld, heightWorld) {
+// Create CSS3D object that embeds the Google Slides published URL directly. The published URL is embeddable.
+function createSlidesCssObject(url, widthWorld, heightWorld) {
   const el = document.createElement('div');
 
   // compute pixels per world unit (clamped) to keep sizes sensible across devices
@@ -280,7 +277,6 @@ function createPdfCssObjectWithGoogleDocs(url, widthWorld, heightWorld) {
   const pxW = Math.round(widthWorld * pixelsPerUnit);
   const pxH = Math.round(heightWorld * pixelsPerUnit);
 
-  // set base size and sensible viewport-relative max sizes
   el.style.width = pxW + 'px';
   el.style.height = pxH + 'px';
   el.style.overflow = 'hidden';
@@ -290,17 +286,14 @@ function createPdfCssObjectWithGoogleDocs(url, widthWorld, heightWorld) {
   el.style.pointerEvents = 'auto';
   el.style.boxSizing = 'border-box';
 
-  // responsive caps so the iframe can't be larger than a reasonable portion of viewport
-  const maxW = Math.round(window.innerWidth * 0.6); // at most 60% viewport width
-  const maxH = Math.round(window.innerHeight * 0.72); // at most 72% viewport height
+  const maxW = Math.round(window.innerWidth * 0.6);
+  const maxH = Math.round(window.innerHeight * 0.72);
   el.style.maxWidth = maxW + 'px';
   el.style.maxHeight = maxH + 'px';
 
-  // Build the Google Docs Viewer URL (embedded)
-  const gviewUrl = `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
-
+  // Use the published slides URL directly — it is designed to be embedded.
   const iframe = document.createElement('iframe');
-  iframe.src = gviewUrl;
+  iframe.src = url;
   iframe.style.width = '100%';
   iframe.style.height = '100%';
   iframe.style.border = '0';
@@ -308,7 +301,6 @@ function createPdfCssObjectWithGoogleDocs(url, widthWorld, heightWorld) {
   iframe.allow = 'fullscreen';
   iframe.setAttribute('allowfullscreen', '');
 
-  // append
   el.appendChild(iframe);
 
   const cssObj = new CSS3DObject(el);
@@ -317,25 +309,24 @@ function createPdfCssObjectWithGoogleDocs(url, widthWorld, heightWorld) {
   cssObj.userData.pixelsPerUnit = pixelsPerUnit;
   cssObj.element = el;
 
-  // position the CSS3DObject in world space at same location as pdfBacking
-  cssObj.position.copy(pdfBacking.position);
-  cssObj.rotation.copy(pdfBacking.rotation);
-  // nudge slightly in front so it's visible
+  cssObj.position.copy(slidesBacking.position);
+  cssObj.rotation.copy(slidesBacking.rotation);
+  // nudge slightly out so it's clearly visible in front of wall
   cssObj.position.x += 0.01;
 
   return cssObj;
 }
 
-const pdfCss = createPdfCssObjectWithGoogleDocs(PDF_URL, PDF_W, PDF_H);
-cssScene.add(pdfCss);
+const slidesCss = createSlidesCssObject(SLIDES_URL, SLIDES_W, SLIDES_H);
+cssScene.add(slidesCss);
 
-// Update function to resize css objects when window changes (keeps iframe from growing too large)
+// Update function to resize css objects when window changes
 function updateCssObjectsSizes() {
   const pixelsPerUnit = Math.max(110, Math.min(220, Math.floor(window.devicePixelRatio * 140)));
   cssScene.children.forEach((c) => {
     if (!c.element) return;
-    const wWorld = c.userData.widthWorld || 3.2;
-    const hWorld = c.userData.heightWorld || 2.0;
+    const wWorld = c.userData.widthWorld || SLIDES_W;
+    const hWorld = c.userData.heightWorld || SLIDES_H;
     const pxW = Math.round(wWorld * pixelsPerUnit);
     const pxH = Math.round(hWorld * pixelsPerUnit);
     c.element.style.width = pxW + 'px';
@@ -462,7 +453,7 @@ function onResize() {
   cssRenderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  // update CSS3D object sizes so the PDF iframe stays constrained
+  // update CSS3D object sizes so the slides iframe stays constrained
   updateCssObjectsSizes();
 }
 window.addEventListener('resize', onResize);
@@ -496,5 +487,5 @@ function animate() {
 animate();
 
 // --- Helpful logs ---
-console.log('Embedded PDF via Google Docs Viewer on right wall at', PDF_URL);
-console.log('If Google blocks embedding, tell me and I can switch to a local PDF.js viewer instead.');
+console.log('Embedded Google Slides presentation on right wall at', SLIDES_URL);
+console.log('If embedding is blocked, let me know and I will provide alternatives (local viewer or open-in-new-tab link).');
