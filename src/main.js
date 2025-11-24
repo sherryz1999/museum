@@ -1,14 +1,10 @@
 // src/main.js
-// Based on commit 9860a90: Emerald exterior theme + door + portraits + PDF on right wall.
-// Change: embed a Google Slides published presentation in the right-wall iframe.
-// The slides URL (published) provided by you is used directly so the presentation fits the CSS3D container.
-//
-// Slides URL used:
-// https://docs.google.com/presentation/d/e/2PACX-1vT0SUWPd9MwElcdH1FiH5AcQ8_oiqvHqg4xa_tnSB9lVh34-TzYnae4Ji5jPj_XLQ/pub?start=false&loop=false&delayms=3000
+// Based on commit 9860a90: Emerald exterior theme + door + portraits.
+// Change: removed the CSS3D / iframe display on the right wall (no display).
+// The right wall is now a simple plane (no embedded slides/PDF).
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
-import { CSS3DRenderer, CSS3DObject } from 'https://unpkg.com/three@0.159.0/examples/jsm/renderers/CSS3DRenderer.js';
 
 const canvasContainer = document.body;
 
@@ -33,17 +29,6 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// --- CSS3D renderer for iframes/pdf/slides embeds ---
-const cssRenderer = new CSS3DRenderer();
-cssRenderer.domElement.style.position = 'absolute';
-cssRenderer.domElement.style.top = '0';
-cssRenderer.domElement.style.left = '0';
-cssRenderer.domElement.style.pointerEvents = 'none'; // outer canvas ignores pointer events; individual iframe containers receive events
-cssRenderer.domElement.style.zIndex = '5';
-document.body.appendChild(cssRenderer.domElement);
-
-const cssScene = new THREE.Scene();
-
 // --- Scene & Camera ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xf8f8f8);
@@ -60,6 +45,7 @@ controls.maxDistance = 50;
 // --- Lighting ---
 const ambient = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambient);
+
 const dir = new THREE.DirectionalLight(0xffffff, 0.6);
 dir.position.set(-5, ROOM.height * 0.9, 5);
 dir.castShadow = true;
@@ -68,9 +54,11 @@ dir.shadow.camera.top = 20; dir.shadow.camera.bottom = -20;
 dir.shadow.mapSize.set(2048, 2048);
 dir.shadow.bias = -0.00005;
 scene.add(dir);
+
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.35);
 hemi.position.set(0, ROOM.height, 0);
 scene.add(hemi);
+
 const fill = new THREE.DirectionalLight(0xffffff, 0.25);
 fill.position.set(0, ROOM.height * 0.8, -1);
 fill.castShadow = false;
@@ -87,15 +75,22 @@ function makePlane(w, h, color) {
   const geo = new THREE.PlaneGeometry(w, h);
   return new THREE.Mesh(geo, mat);
 }
+
 const floor = makePlane(ROOM.width, ROOM.depth, 0xede6dd);
 floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
-const ceiling = makePlane(ROOM.width, ROOM.depth, 0xf0f0f0); ceiling.rotation.x = Math.PI / 2; ceiling.position.y = ROOM.height; scene.add(ceiling);
+
+const ceiling = makePlane(ROOM.width, ROOM.depth, 0xf0f0f0);
+ceiling.rotation.x = Math.PI / 2; ceiling.position.y = ROOM.height; scene.add(ceiling);
+
+// back wall exterior color
 const backWall = makePlane(ROOM.width, ROOM.height, EMERALD_PRIMARY);
 backWall.position.z = -ROOM.depth / 2; backWall.position.y = ROOM.height / 2; scene.add(backWall);
-// left/right interior walls neutral / accent
+
+// left and right walls — now both are simple interior walls (no display)
 const leftWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
 leftWall.rotation.y = Math.PI / 2; leftWall.position.x = -ROOM.width / 2; leftWall.position.y = ROOM.height / 2; scene.add(leftWall);
-const rightWall = makePlane(ROOM.depth, ROOM.height, EMERALD_ACCENT);
+
+const rightWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
 rightWall.rotation.y = -Math.PI / 2; rightWall.position.x = ROOM.width / 2; rightWall.position.y = ROOM.height / 2; scene.add(rightWall);
 
 // --- Loader ---
@@ -105,7 +100,7 @@ if (typeof loader.setCrossOrigin === 'function') {
 }
 loader.crossOrigin = 'anonymous';
 
-// --- Frame creation (unchanged) ---
+// --- Frame creation ---
 function createFrame({
   x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01,
   openingWidth = 3.2, openingHeight = 1.8,
@@ -114,12 +109,14 @@ function createFrame({
 } = {}) {
   const outerW = openingWidth + frameBorderThickness * 2;
   const outerH = openingHeight + frameBorderThickness * 2;
+
   const shape = new THREE.Shape();
   shape.moveTo(-outerW / 2, -outerH / 2);
   shape.lineTo(-outerW / 2, outerH / 2);
   shape.lineTo(outerW / 2, outerH / 2);
   shape.lineTo(outerW / 2, -outerH / 2);
   shape.lineTo(-outerW / 2, -outerH / 2);
+
   const hole = new THREE.Path();
   hole.moveTo(-openingWidth / 2, -openingHeight / 2);
   hole.lineTo(-openingWidth / 2, openingHeight / 2);
@@ -127,15 +124,19 @@ function createFrame({
   hole.lineTo(openingWidth / 2, -openingHeight / 2);
   hole.lineTo(-openingWidth / 2, -openingHeight / 2);
   shape.holes.push(hole);
+
   const extrudeSettings = { depth: frameDepth, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 1, steps: 1 };
   const frameGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
   const group = new THREE.Group();
+
   const frameMat = new THREE.MeshStandardMaterial({ color: 0x5a3b2a, roughness: 0.6, metalness: 0.02 });
   const frameMesh = new THREE.Mesh(frameGeo, frameMat);
   frameMesh.castShadow = !isPortrait;
   frameMesh.receiveShadow = true;
   frameMesh.position.set(0, 0, -frameDepth / 2);
   group.add(frameMesh);
+
   const matW = openingWidth - matInset * 2;
   const matH = openingHeight - matInset * 2;
   const matGeo = new THREE.PlaneGeometry(matW, matH);
@@ -143,6 +144,7 @@ function createFrame({
   matMesh.position.set(0, 0, frameDepth / 2 + 0.005);
   matMesh.castShadow = false;
   group.add(matMesh);
+
   const thumbGeo = new THREE.PlaneGeometry(matW - 0.02, matH - 0.02);
   const placeholder = new THREE.MeshBasicMaterial({ color: 0x111111 });
   const thumbMesh = new THREE.Mesh(thumbGeo, placeholder);
@@ -151,6 +153,7 @@ function createFrame({
   thumbMesh.userData = Object.assign({ type: isPortrait ? 'portrait' : 'video-frame', videoId, title }, userdata);
   thumbMesh.position.set(0, 0, frameDepth / 2 + 0.01);
   group.add(thumbMesh);
+
   if (imageUrl) {
     const absUrl = (new URL(imageUrl, window.location.href)).href;
     loader.load(absUrl, (tex) => {
@@ -169,31 +172,35 @@ function createFrame({
       thumbMesh.material.needsUpdate = true;
     }, undefined, () => {});
   }
+
   const glassMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.04 });
   const glassMesh = new THREE.Mesh(thumbGeo.clone(), glassMat);
   glassMesh.position.set(0, 0, frameDepth / 2 + 0.017);
   glassMesh.castShadow = false;
   group.add(glassMesh);
+
   const rimGeo = new THREE.BoxGeometry(outerW + 0.002, outerH + 0.002, 0.004);
   const rimMat = new THREE.MeshStandardMaterial({ color: 0x2c1f17, roughness: 0.7 });
   const rimMesh = new THREE.Mesh(rimGeo, rimMat);
   rimMesh.position.set(0, 0, -frameDepth / 2 - 0.002);
   rimMesh.castShadow = !isPortrait;
   group.add(rimMesh);
+
   group.position.set(x, y, z);
   group.rotation.y = rotationY;
   scene.add(group);
+
   thumbMesh.userData._group = group;
   if (!thumbMesh.userData.imageUrl) thumbMesh.userData.imageUrl = imageUrl ? (new URL(imageUrl, window.location.href)).href : '';
   return thumbMesh;
 }
 
-// --- Main interior frames (unchanged) ---
+// --- Main interior frames (center + decorations) ---
 createFrame({ x: 0, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, videoId: YOUTUBE_VIDEO_ID, title: 'Violin Performance', rotationY: 0 });
 createFrame({ x: 4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, title: 'Art 2', rotationY: 0 });
 createFrame({ x: -4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, title: 'Art 1', rotationY: 0 });
 
-// --- Portraits on left wall (unchanged) ---
+// --- Portraits on left wall (centered vertically and evenly spaced) ---
 const portraitCount = PORTRAIT_FILES.length;
 if (portraitCount > 0) {
   const padding = 0.6;
@@ -202,6 +209,7 @@ if (portraitCount > 0) {
   const portraitFrameDepth = 0.06;
   const leftX = -ROOM.width / 2 + GAP_WORLD_UNITS + portraitFrameDepth / 2;
   const portraitY = ROOM.height / 2;
+
   for (let i = 0; i < portraitCount; i++) {
     const file = PORTRAIT_FILES[i];
     const z = -ROOM.depth / 2 + padding + GAP_WORLD_UNITS + segment * i;
@@ -217,17 +225,20 @@ if (portraitCount > 0) {
   }
 }
 
-// --- Front wall & door (unchanged) ---
+// --- Front wall & door ---
 const DOOR_WIDTH = 2.2, DOOR_HEIGHT = 2.2, DOOR_DEPTH = 0.08;
 const leftSegW = (ROOM.width - DOOR_WIDTH) / 2;
 const rightSegW = leftSegW;
 const wallH = ROOM.height;
+
 const frontLeft = new THREE.Mesh(new THREE.PlaneGeometry(leftSegW, wallH), new THREE.MeshStandardMaterial({ color: EMERALD_PRIMARY, side: THREE.DoubleSide }));
 frontLeft.position.set(-ROOM.width / 2 + leftSegW / 2, wallH / 2, ROOM.depth / 2);
 frontLeft.rotation.y = Math.PI; scene.add(frontLeft);
+
 const frontRight = new THREE.Mesh(new THREE.PlaneGeometry(rightSegW, wallH), new THREE.MeshStandardMaterial({ color: EMERALD_PRIMARY, side: THREE.DoubleSide }));
 frontRight.position.set(ROOM.width / 2 - rightSegW / 2, wallH / 2, ROOM.depth / 2);
 frontRight.rotation.y = Math.PI; scene.add(frontRight);
+
 const doorFrameThickness = 0.06;
 const doorFrameMat = new THREE.MeshStandardMaterial({ color: OUTSIDE_TRIM, roughness: 0.6 });
 const frameGroup = new THREE.Group();
@@ -238,105 +249,20 @@ const frameTop = new THREE.Mesh(new THREE.BoxGeometry(DOOR_WIDTH + doorFrameThic
 frameTop.position.set(0, DOOR_HEIGHT / 2 + doorFrameThickness / 2, 0);
 frameGroup.add(frameLeft, frameRight, frameTop);
 frameGroup.position.set(0, DOOR_HEIGHT / 2, ROOM.depth / 2 - 0.001); frameGroup.rotation.y = Math.PI; scene.add(frameGroup);
+
 const doorGroup = new THREE.Group();
 doorGroup.position.set(-DOOR_WIDTH / 2, DOOR_HEIGHT / 2, ROOM.depth / 2 + 0.005); doorGroup.rotation.y = 0; scene.add(doorGroup);
+
 const doorGeo = new THREE.BoxGeometry(DOOR_WIDTH, DOOR_HEIGHT, DOOR_DEPTH);
 const doorMat = new THREE.MeshStandardMaterial({ color: OUTSIDE_TRIM, roughness: 0.5 });
 const doorMesh = new THREE.Mesh(doorGeo, doorMat);
 doorMesh.position.set(DOOR_WIDTH / 2, 0, -DOOR_DEPTH / 2); doorMesh.castShadow = true; doorMesh.receiveShadow = true; doorMesh.userData = { type: 'door' }; doorGroup.add(doorMesh);
+
 const knob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 12), new THREE.MeshStandardMaterial({ color: 0xcccc99 }));
 knob.position.set(DOOR_WIDTH - 0.22, 0, 0.03); doorMesh.add(knob);
+
 let doorOpen = false; let doorTargetRotation = 0; const DOOR_OPEN_ANGLE = -Math.PI / 2 + 0.05;
 function toggleDoor() { doorOpen = !doorOpen; doorTargetRotation = doorOpen ? DOOR_OPEN_ANGLE : 0; }
-
-// --- Google Slides embed on the RIGHT wall (middle) ---
-// Use the published Google Slides presentation URL (user-provided)
-const SLIDES_URL = 'https://docs.google.com/presentation/d/e/2PACX-1vT0SUWPd9MwElcdH1FiH5AcQ8_oiqvHqg4xa_tnSB9lVh34-TzYnae4Ji5jPj_XLQ/pub?start=false&loop=false&delayms=3000';
-
-// Frame world dimensions
-const SLIDES_W = 3.2;
-const SLIDES_H = 2.0;
-const slidesFrameDepth = 0.06;
-
-// Backing panel (WebGL) to sit behind the iframe
-const slidesBackingMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 });
-const slidesBackingGeo = new THREE.PlaneGeometry(SLIDES_W, SLIDES_H);
-const slidesBacking = new THREE.Mesh(slidesBackingGeo, slidesBackingMat);
-slidesBacking.position.set(ROOM.width / 2 - (slidesFrameDepth / 2 + 0.02), ROOM.height / 2, 0); // flush to right wall interior
-slidesBacking.rotation.y = -Math.PI / 2;
-slidesBacking.receiveShadow = true;
-slidesBacking.castShadow = false;
-scene.add(slidesBacking);
-
-// Create CSS3D object that embeds the Google Slides published URL directly. The published URL is embeddable.
-function createSlidesCssObject(url, widthWorld, heightWorld) {
-  const el = document.createElement('div');
-
-  // compute pixels per world unit (clamped) to keep sizes sensible across devices
-  const pixelsPerUnit = Math.max(110, Math.min(220, Math.floor(window.devicePixelRatio * 140)));
-  const pxW = Math.round(widthWorld * pixelsPerUnit);
-  const pxH = Math.round(heightWorld * pixelsPerUnit);
-
-  el.style.width = pxW + 'px';
-  el.style.height = pxH + 'px';
-  el.style.overflow = 'hidden';
-  el.style.background = '#fff';
-  el.style.borderRadius = '4px';
-  el.style.boxShadow = '0 6px 18px rgba(0,0,0,0.25)';
-  el.style.pointerEvents = 'auto';
-  el.style.boxSizing = 'border-box';
-
-  const maxW = Math.round(window.innerWidth * 0.6);
-  const maxH = Math.round(window.innerHeight * 0.72);
-  el.style.maxWidth = maxW + 'px';
-  el.style.maxHeight = maxH + 'px';
-
-  // Use the published slides URL directly — it is designed to be embedded.
-  const iframe = document.createElement('iframe');
-  iframe.src = url;
-  iframe.style.width = '100%';
-  iframe.style.height = '100%';
-  iframe.style.border = '0';
-  iframe.style.display = 'block';
-  iframe.allow = 'fullscreen';
-  iframe.setAttribute('allowfullscreen', '');
-
-  el.appendChild(iframe);
-
-  const cssObj = new CSS3DObject(el);
-  cssObj.userData.widthWorld = widthWorld;
-  cssObj.userData.heightWorld = heightWorld;
-  cssObj.userData.pixelsPerUnit = pixelsPerUnit;
-  cssObj.element = el;
-
-  cssObj.position.copy(slidesBacking.position);
-  cssObj.rotation.copy(slidesBacking.rotation);
-  // nudge slightly out so it's clearly visible in front of wall
-  cssObj.position.x += 0.01;
-
-  return cssObj;
-}
-
-const slidesCss = createSlidesCssObject(SLIDES_URL, SLIDES_W, SLIDES_H);
-cssScene.add(slidesCss);
-
-// Update function to resize css objects when window changes
-function updateCssObjectsSizes() {
-  const pixelsPerUnit = Math.max(110, Math.min(220, Math.floor(window.devicePixelRatio * 140)));
-  cssScene.children.forEach((c) => {
-    if (!c.element) return;
-    const wWorld = c.userData.widthWorld || SLIDES_W;
-    const hWorld = c.userData.heightWorld || SLIDES_H;
-    const pxW = Math.round(wWorld * pixelsPerUnit);
-    const pxH = Math.round(hWorld * pixelsPerUnit);
-    c.element.style.width = pxW + 'px';
-    c.element.style.height = pxH + 'px';
-    const maxW = Math.round(window.innerWidth * 0.6);
-    const maxH = Math.round(window.innerHeight * 0.72);
-    c.element.style.maxWidth = maxW + 'px';
-    c.element.style.maxHeight = maxH + 'px';
-  });
-}
 
 // --- Image modal (unchanged) ---
 const imgModal = document.createElement('div');
@@ -446,20 +372,16 @@ function closeVideoModal() { if (ytIframe && modal) { ytIframe.src = ''; modal.s
 if (closeBtn) closeBtn.addEventListener('click', closeVideoModal);
 if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeVideoModal(); });
 
-// --- Resize handling ---
+// --- Resize / render ---
 function onResize() {
   const w = window.innerWidth; const h = window.innerHeight;
   renderer.setSize(w, h);
-  cssRenderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  // update CSS3D object sizes so the slides iframe stays constrained
-  updateCssObjectsSizes();
 }
 window.addEventListener('resize', onResize);
 onResize();
 
-// --- Animation loop (door animation included) ---
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
@@ -482,10 +404,8 @@ function animate() {
   });
 
   renderer.render(scene, camera);
-  cssRenderer.render(cssScene, camera);
 }
 animate();
 
 // --- Helpful logs ---
-console.log('Embedded Google Slides presentation on right wall at', SLIDES_URL);
-console.log('If embedding is blocked, let me know and I will provide alternatives (local viewer or open-in-new-tab link).');
+console.log('Right-wall display removed. The right wall is now a simple interior plane.');
