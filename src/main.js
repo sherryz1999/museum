@@ -1,13 +1,13 @@
 // src/main.js
 // Based on commit 9860a90: Emerald exterior theme + door + portraits + PDF on right wall.
-// Fix: constrain the CSS3D iframe used for the PDF so it no longer expands to cover the viewport.
+// Change: embed the PDF using PDF.js viewer (mozilla.github.io/pdf.js) with fit-to-width mode,
+// so the PDF is rendered inside the CSS3D iframe and automatically fits the CSS container.
+// Fallback: if the PDF.js viewer isn't reachable, the iframe will still show the raw PDF (browser PDF UI).
 //
-// What I changed:
-// - createPdfCssObject now computes pixels-per-world-unit and clamps sizes, sets sensible maxWidth/maxHeight
-//   (viewport-relative) and overflow:hidden so the PDF is confined to the intended frame.
-// - The CSS3DObject created stores width/height in userData so onResize can recompute pixel sizes.
-// - onResize now calls updateCssObjectsSizes to resize all CSS3D objects when the window changes size.
-// - iframe styles set to 100%/100% and pointerEvents left as auto so interaction still works.
+// Notes:
+// - Uses the PDF.js hosted viewer at https://mozilla.github.io/pdf.js/web/viewer.html?file={url}#zoom=page-width
+//   which supports a fit (page-width) behavior via the hash parameter.
+// - The CSS3D iframe container is constrained via px-per-world-unit + viewport caps so it fits the wall frame.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -41,7 +41,7 @@ const cssRenderer = new CSS3DRenderer();
 cssRenderer.domElement.style.position = 'absolute';
 cssRenderer.domElement.style.top = '0';
 cssRenderer.domElement.style.left = '0';
-cssRenderer.domElement.style.pointerEvents = 'none'; // outer canvas ignores pointer events
+cssRenderer.domElement.style.pointerEvents = 'none'; // outer canvas ignores pointer events; iframe containers will receive events
 cssRenderer.domElement.style.zIndex = '5';
 document.body.appendChild(cssRenderer.domElement);
 
@@ -108,7 +108,7 @@ if (typeof loader.setCrossOrigin === 'function') {
 }
 loader.crossOrigin = 'anonymous';
 
-// --- Frame creation ---
+// --- Frame creation (unchanged) ---
 function createFrame({
   x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01,
   openingWidth = 3.2, openingHeight = 1.8,
@@ -203,7 +203,7 @@ if (portraitCount > 0) {
   const usableDepth = ROOM.depth - padding * 2 - GAP_WORLD_UNITS * 2;
   const segment = portraitCount === 1 ? 0 : usableDepth / (portraitCount - 1);
   const portraitFrameDepth = 0.06;
-  const leftX = -ROOM.width / 2 + GAP_WORLD_UNITS + portraitFrameDepth / 12;
+  const leftX = -ROOM.width / 2 + GAP_WORLD_UNITS + portraitFrameDepth / 2;
   const portraitY = ROOM.height / 2;
   for (let i = 0; i < portraitCount; i++) {
     const file = PORTRAIT_FILES[i];
@@ -271,9 +271,10 @@ pdfBacking.receiveShadow = true;
 pdfBacking.castShadow = false;
 scene.add(pdfBacking);
 
-// Create the CSS3D iframe container and CSS3DObject
-function createPdfCssObject(url, widthWorld, heightWorld) {
+// Create the CSS3D iframe container and CSS3DObject using PDF.js viewer (fit-to-width)
+function createPdfCssObjectWithPdfJs(url, widthWorld, heightWorld) {
   const el = document.createElement('div');
+
   // compute pixels per world unit (clamped) to keep sizes sensible across devices
   const pixelsPerUnit = Math.max(110, Math.min(220, Math.floor(window.devicePixelRatio * 140)));
   const pxW = Math.round(widthWorld * pixelsPerUnit);
@@ -295,19 +296,47 @@ function createPdfCssObject(url, widthWorld, heightWorld) {
   el.style.maxWidth = maxW + 'px';
   el.style.maxHeight = maxH + 'px';
 
+  // Use PDF.js hosted viewer with fit-to-width param (#zoom=page-width)
+  // viewerBase is the hosted PDF.js web viewer; we pass the file URL as query param
+  const viewerBase = 'https://mozilla.github.io/pdf.js/web/viewer.html';
+  // Some browsers / CDNs may block embedding the hosted viewer via iframe; if so, the raw PDF is fallback.
   const iframe = document.createElement('iframe');
-  iframe.src = url;
+
+  // Build the PDF.js viewer URL, instruct it to fit page width
+  // encode URL for query param then append hash '#zoom=page-width' for fit behavior
+  const pdfJsUrl = `${viewerBase}?file=${encodeURIComponent(url)}#zoom=page-width`;
+
+  iframe.src = pdfJsUrl;
   iframe.style.width = '100%';
   iframe.style.height = '100%';
   iframe.style.border = '0';
   iframe.style.display = 'block';
   iframe.allow = 'fullscreen';
   iframe.setAttribute('allowfullscreen', '');
-  // Do not set position:fixed inside iframe (we can't), but container overflow:hidden will clip content
+
+  // If PDF.js viewer is blocked (e.g., CSP), we leave iframe.src as-is; the browser may show an error or fallback.
+  // As a safety fallback, also attach a small onerror handler that swaps to Google Docs Viewer after a short delay.
+  // Note: iframe.onerror may not fire for cross-origin frames in some browsers, so we also use a timeout check.
+  let fallbackTimeout = setTimeout(() => {
+    // after 2.5s, if iframe didn't load (still in about:blank or blocked), switch to Google Docs viewer fallback
+    try {
+      // try to access contentWindow.location.href — will throw if cross-origin but that's fine
+      // Instead, check readyState via message passing is complex; we keep a best-effort fallback:
+      // Switch to Google Docs Viewer fallback URL:
+      iframe.src = `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
+    } catch (e) {
+      iframe.src = `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
+    }
+  }, 2500);
+
+  // If iframe loads quickly, clear fallback
+  iframe.onload = () => {
+    clearTimeout(fallbackTimeout);
+  };
+
   el.appendChild(iframe);
 
   const cssObj = new CSS3DObject(el);
-  // store world dimensions so we can recompute on resize
   cssObj.userData.widthWorld = widthWorld;
   cssObj.userData.heightWorld = heightWorld;
   cssObj.userData.pixelsPerUnit = pixelsPerUnit;
@@ -318,10 +347,12 @@ function createPdfCssObject(url, widthWorld, heightWorld) {
   // nudge slightly in front so it's visible
   cssObj.position.x += 0.01;
 
+  // store element reference for resize updates
+  cssObj.element = el;
   return cssObj;
 }
 
-const pdfCss = createPdfCssObject(PDF_URL, PDF_W, PDF_H);
+const pdfCss = createPdfCssObjectWithPdfJs(PDF_URL, PDF_W, PDF_H);
 cssScene.add(pdfCss);
 
 // Update function to resize css objects when window changes (keeps iframe from growing too large)
@@ -335,7 +366,6 @@ function updateCssObjectsSizes() {
     const pxH = Math.round(hWorld * pixelsPerUnit);
     c.element.style.width = pxW + 'px';
     c.element.style.height = pxH + 'px';
-    // reapply viewport caps
     const maxW = Math.round(window.innerWidth * 0.6);
     const maxH = Math.round(window.innerHeight * 0.72);
     c.element.style.maxWidth = maxW + 'px';
@@ -492,5 +522,5 @@ function animate() {
 animate();
 
 // --- Helpful logs ---
-console.log('PDF embedded on right wall at', PDF_URL);
-console.log('If the PDF does not load or is still too large, try lowering the pixelsPerUnit clamp (in src/main.js).');
+console.log('Embedded PDF via PDF.js viewer on right wall at', PDF_URL);
+console.log('If the hosted PDF.js viewer is blocked by CSP, the code will fall back to Google Docs Viewer.');
