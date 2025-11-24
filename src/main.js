@@ -1,12 +1,11 @@
 // src/main.js
-// Museum scene — apply Emerald HS exterior color theme to outside walls and add an interactive front door.
-// - Front wall is split into left/right segments with a central door opening.
-// - Door is a pivoting mesh (hinge on left) that opens/closes on click with a smooth animation.
-// - Exterior wall materials use an emerald-inspired palette sampled from the provided image.
-// - Uses the same scene/interaction code as before (portraits, modal, hover, etc.)
+// Based on commit 9860a90: Emerald exterior theme + door + portraits.
+// Added: embed a PDF at the middle of the right wall using a CSS3D iframe so the PDF (CatFoodDrive.pdf)
+// can be viewed in-place. Uses CSS3DRenderer for the iframe and keeps the WebGL scene for the room.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
+import { CSS3DRenderer, CSS3DObject } from 'https://unpkg.com/three@0.159.0/examples/jsm/renderers/CSS3DRenderer.js';
 
 const canvasContainer = document.body;
 
@@ -31,6 +30,17 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
+// --- CSS3D renderer for iframes/pdf embeds ---
+const cssRenderer = new CSS3DRenderer();
+cssRenderer.domElement.style.position = 'absolute';
+cssRenderer.domElement.style.top = '0';
+cssRenderer.domElement.style.left = '0';
+cssRenderer.domElement.style.pointerEvents = 'none'; // let individual iframe containers receive events
+cssRenderer.domElement.style.zIndex = '5';
+document.body.appendChild(cssRenderer.domElement);
+
+const cssScene = new THREE.Scene();
+
 // --- Scene & Camera ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xf8f8f8);
@@ -39,16 +49,15 @@ camera.position.set(0, 1.6, ROOM.depth / 2 + 2.5);
 
 // --- Controls ---
 const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 16, 0); // preserve previous target (typo-safe below)
 controls.target.set(0, 1.6, 0);
 controls.enableDamping = true;
 controls.minDistance = 1.5;
 controls.maxDistance = 50;
 
 // --- Lighting ---
-// Soft ambient + directional + hemisphere + fill (portraits set to not cast shadows)
 const ambient = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambient);
-
 const dir = new THREE.DirectionalLight(0xffffff, 0.6);
 dir.position.set(-5, ROOM.height * 0.9, 5);
 dir.castShadow = true;
@@ -57,61 +66,35 @@ dir.shadow.camera.top = 20; dir.shadow.camera.bottom = -20;
 dir.shadow.mapSize.set(2048, 2048);
 dir.shadow.bias = -0.00005;
 scene.add(dir);
-
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.35);
 hemi.position.set(0, ROOM.height, 0);
 scene.add(hemi);
-
 const fill = new THREE.DirectionalLight(0xffffff, 0.25);
 fill.position.set(0, ROOM.height * 0.8, -1);
 fill.castShadow = false;
 scene.add(fill);
 
-// --- Palette (approx. from Emerald HS hero image) ---
-// Primary emerald tone, secondary trim and warm accent
-const EMERALD_PRIMARY = 0x0f6b58; // deep emerald
-const EMERALD_ACCENT = 0x7fcfb1; // lighter accent
-const OUTSIDE_TRIM = 0x734b2b; // warm wood/bronze accent, used on door/frame
+// --- Palette ---
+const EMERALD_PRIMARY = 0x0f6b58;
+const EMERALD_ACCENT = 0x7fcfb1;
+const OUTSIDE_TRIM = 0x734b2b;
 
 // --- Room planes ---
-// makePlane returns a Mesh positioned at origin; call-site positions it
 function makePlane(w, h, color) {
   const mat = new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide });
   const geo = new THREE.PlaneGeometry(w, h);
   return new THREE.Mesh(geo, mat);
 }
-
 const floor = makePlane(ROOM.width, ROOM.depth, 0xede6dd);
-floor.rotation.x = -Math.PI / 2;
-floor.position.y = 0;
-floor.receiveShadow = true;
-scene.add(floor);
-
-const ceiling = makePlane(ROOM.width, ROOM.depth, 0xf0f0f0);
-ceiling.rotation.x = Math.PI / 2;
-ceiling.position.y = ROOM.height;
-scene.add(ceiling);
-
-const backWall = makePlane(ROOM.width, ROOM.height, EMERALD_PRIMARY); // outside/back painted emerald
-backWall.position.z = -ROOM.depth / 2;
-backWall.position.y = ROOM.height / 2;
-scene.add(backWall);
-
-// Front wall will be built as left/right segments around the door to create an opening
-// so we do not create `frontWall` as a single plane here.
-
-// Left and right interior walls — keep interior neutral (light)
+floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
+const ceiling = makePlane(ROOM.width, ROOM.depth, 0xf0f0f0); ceiling.rotation.x = Math.PI / 2; ceiling.position.y = ROOM.height; scene.add(ceiling);
+const backWall = makePlane(ROOM.width, ROOM.height, EMERALD_PRIMARY);
+backWall.position.z = -ROOM.depth / 2; backWall.position.y = ROOM.height / 2; scene.add(backWall);
+// left/right interior walls neutral
 const leftWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
-leftWall.rotation.y = Math.PI / 2;
-leftWall.position.x = -ROOM.width / 2;
-leftWall.position.y = ROOM.height / 2;
-scene.add(leftWall);
-
-const rightWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
-rightWall.rotation.y = -Math.PI / 2;
-rightWall.position.x = ROOM.width / 2;
-rightWall.position.y = ROOM.height / 2;
-scene.add(rightWall);
+leftWall.rotation.y = Math.PI / 2; leftWall.position.x = -ROOM.width / 2; leftWall.position.y = ROOM.height / 2; scene.add(leftWall);
+const rightWall = makePlane(ROOM.depth, ROOM.height, EMERALD_ACCENT); // use accent for outside feel on right wall exterior side
+rightWall.rotation.y = -Math.PI / 2; rightWall.position.x = ROOM.width / 2; rightWall.position.y = ROOM.height / 2; scene.add(rightWall);
 
 // --- Loader ---
 const loader = new THREE.TextureLoader();
@@ -120,7 +103,7 @@ if (typeof loader.setCrossOrigin === 'function') {
 }
 loader.crossOrigin = 'anonymous';
 
-// --- Frame creation (same as before), portraits will be isPortrait=true to avoid casting shadows ---
+// --- Frame creation (unchanged) ---
 function createFrame({
   x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01,
   openingWidth = 3.2, openingHeight = 1.8,
@@ -129,14 +112,12 @@ function createFrame({
 } = {}) {
   const outerW = openingWidth + frameBorderThickness * 2;
   const outerH = openingHeight + frameBorderThickness * 2;
-
   const shape = new THREE.Shape();
   shape.moveTo(-outerW / 2, -outerH / 2);
   shape.lineTo(-outerW / 2, outerH / 2);
   shape.lineTo(outerW / 2, outerH / 2);
   shape.lineTo(outerW / 2, -outerH / 2);
   shape.lineTo(-outerW / 2, -outerH / 2);
-
   const hole = new THREE.Path();
   hole.moveTo(-openingWidth / 2, -openingHeight / 2);
   hole.lineTo(-openingWidth / 2, openingHeight / 2);
@@ -144,20 +125,15 @@ function createFrame({
   hole.lineTo(openingWidth / 2, -openingHeight / 2);
   hole.lineTo(-openingWidth / 2, -openingHeight / 2);
   shape.holes.push(hole);
-
   const extrudeSettings = { depth: frameDepth, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.01, bevelSegments: 1, steps: 1 };
   const frameGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-
   const group = new THREE.Group();
-
   const frameMat = new THREE.MeshStandardMaterial({ color: 0x5a3b2a, roughness: 0.6, metalness: 0.02 });
   const frameMesh = new THREE.Mesh(frameGeo, frameMat);
-  // frames only cast shadows if not portraits
   frameMesh.castShadow = !isPortrait;
   frameMesh.receiveShadow = true;
   frameMesh.position.set(0, 0, -frameDepth / 2);
   group.add(frameMesh);
-
   const matW = openingWidth - matInset * 2;
   const matH = openingHeight - matInset * 2;
   const matGeo = new THREE.PlaneGeometry(matW, matH);
@@ -165,7 +141,6 @@ function createFrame({
   matMesh.position.set(0, 0, frameDepth / 2 + 0.005);
   matMesh.castShadow = false;
   group.add(matMesh);
-
   const thumbGeo = new THREE.PlaneGeometry(matW - 0.02, matH - 0.02);
   const placeholder = new THREE.MeshBasicMaterial({ color: 0x111111 });
   const thumbMesh = new THREE.Mesh(thumbGeo, placeholder);
@@ -174,7 +149,6 @@ function createFrame({
   thumbMesh.userData = Object.assign({ type: isPortrait ? 'portrait' : 'video-frame', videoId, title }, userdata);
   thumbMesh.position.set(0, 0, frameDepth / 2 + 0.01);
   group.add(thumbMesh);
-
   if (imageUrl) {
     const absUrl = (new URL(imageUrl, window.location.href)).href;
     loader.load(absUrl, (tex) => {
@@ -193,35 +167,31 @@ function createFrame({
       thumbMesh.material.needsUpdate = true;
     }, undefined, () => {});
   }
-
   const glassMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.04 });
   const glassMesh = new THREE.Mesh(thumbGeo.clone(), glassMat);
   glassMesh.position.set(0, 0, frameDepth / 2 + 0.017);
   glassMesh.castShadow = false;
   group.add(glassMesh);
-
   const rimGeo = new THREE.BoxGeometry(outerW + 0.002, outerH + 0.002, 0.004);
   const rimMat = new THREE.MeshStandardMaterial({ color: 0x2c1f17, roughness: 0.7 });
   const rimMesh = new THREE.Mesh(rimGeo, rimMat);
   rimMesh.position.set(0, 0, -frameDepth / 2 - 0.002);
   rimMesh.castShadow = !isPortrait;
   group.add(rimMesh);
-
   group.position.set(x, y, z);
   group.rotation.y = rotationY;
   scene.add(group);
-
   thumbMesh.userData._group = group;
   if (!thumbMesh.userData.imageUrl) thumbMesh.userData.imageUrl = imageUrl ? (new URL(imageUrl, window.location.href)).href : '';
   return thumbMesh;
 }
 
-// --- Add main interior frames (center + decorations) ---
+// --- Main interior frames (unchanged) ---
 createFrame({ x: 0, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, videoId: YOUTUBE_VIDEO_ID, title: 'Violin Performance', rotationY: 0 });
 createFrame({ x: 4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, title: 'Art 2', rotationY: 0 });
 createFrame({ x: -4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, title: 'Art 1', rotationY: 0 });
 
-// --- Portraits on left wall (unchanged logic, centered vertically and evenly spaced) ---
+// --- Portraits on left wall (unchanged) ---
 const portraitCount = PORTRAIT_FILES.length;
 if (portraitCount > 0) {
   const padding = 0.6;
@@ -230,7 +200,6 @@ if (portraitCount > 0) {
   const portraitFrameDepth = 0.06;
   const leftX = -ROOM.width / 2 + GAP_WORLD_UNITS + portraitFrameDepth / 2;
   const portraitY = ROOM.height / 2;
-
   for (let i = 0; i < portraitCount; i++) {
     const file = PORTRAIT_FILES[i];
     const z = -ROOM.depth / 2 + padding + GAP_WORLD_UNITS + segment * i;
@@ -246,79 +215,94 @@ if (portraitCount > 0) {
   }
 }
 
-// --- Front wall with door ---
-// Door dimensions (world units)
-const DOOR_WIDTH = 2.2;
-const DOOR_HEIGHT = 2.2;
-const DOOR_DEPTH = 0.08;
-const doorGap = 0.02; // slight gap between door and frame
-
-// front wall left/right segments (use emerald exterior color)
+// --- Front wall & door (unchanged) ---
+// Door dimensions and placement code kept from commit 9860a90
+const DOOR_WIDTH = 2.2, DOOR_HEIGHT = 2.2, DOOR_DEPTH = 0.08;
 const leftSegW = (ROOM.width - DOOR_WIDTH) / 2;
 const rightSegW = leftSegW;
 const wallH = ROOM.height;
-
-// Left segment (from left edge to door left)
 const frontLeft = new THREE.Mesh(new THREE.PlaneGeometry(leftSegW, wallH), new THREE.MeshStandardMaterial({ color: EMERALD_PRIMARY, side: THREE.DoubleSide }));
 frontLeft.position.set(-ROOM.width / 2 + leftSegW / 2, wallH / 2, ROOM.depth / 2);
 frontLeft.rotation.y = Math.PI;
 scene.add(frontLeft);
-
-// Right segment (from door right to right edge)
 const frontRight = new THREE.Mesh(new THREE.PlaneGeometry(rightSegW, wallH), new THREE.MeshStandardMaterial({ color: EMERALD_PRIMARY, side: THREE.DoubleSide }));
 frontRight.position.set(ROOM.width / 2 - rightSegW / 2, wallH / 2, ROOM.depth / 2);
 frontRight.rotation.y = Math.PI;
 scene.add(frontRight);
-
-// Door frame trim (thin box surrounding opening)
 const doorFrameThickness = 0.06;
 const doorFrameMat = new THREE.MeshStandardMaterial({ color: OUTSIDE_TRIM, roughness: 0.6 });
 const frameGroup = new THREE.Group();
 const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(doorFrameThickness, DOOR_HEIGHT + 0.02, DOOR_DEPTH + 0.01), doorFrameMat);
 frameLeft.position.set(-DOOR_WIDTH / 2 - doorFrameThickness / 2, 0, 0);
-const frameRight = frameLeft.clone();
-frameRight.position.x = DOOR_WIDTH / 2 + doorFrameThickness / 2;
+const frameRight = frameLeft.clone(); frameRight.position.x = DOOR_WIDTH / 2 + doorFrameThickness / 2;
 const frameTop = new THREE.Mesh(new THREE.BoxGeometry(DOOR_WIDTH + doorFrameThickness * 2, doorFrameThickness, DOOR_DEPTH + 0.01), doorFrameMat);
 frameTop.position.set(0, DOOR_HEIGHT / 2 + doorFrameThickness / 2, 0);
 frameGroup.add(frameLeft, frameRight, frameTop);
-frameGroup.position.set(0, DOOR_HEIGHT / 2, ROOM.depth / 2 - 0.001);
-frameGroup.rotation.y = Math.PI;
-scene.add(frameGroup);
-
-// Door mesh (pivoting on the left edge)
-// We'll make a doorGroup with pivot at hinge (left edge), door mesh offset so hinge sits at group origin.
+frameGroup.position.set(0, DOOR_HEIGHT / 2, ROOM.depth / 2 - 0.001); frameGroup.rotation.y = Math.PI; scene.add(frameGroup);
 const doorGroup = new THREE.Group();
-doorGroup.position.set(-DOOR_WIDTH / 2, DOOR_HEIGHT / 2, ROOM.depth / 2 + 0.005); // hinge world pos (left edge)
-doorGroup.rotation.y = 0; // closed rotation angle = 0
-scene.add(doorGroup);
-
-// door geometry centered at doorWidth/2 to the right of hinge
+doorGroup.position.set(-DOOR_WIDTH / 2, DOOR_HEIGHT / 2, ROOM.depth / 2 + 0.005); doorGroup.rotation.y = 0; scene.add(doorGroup);
 const doorGeo = new THREE.BoxGeometry(DOOR_WIDTH, DOOR_HEIGHT, DOOR_DEPTH);
 const doorMat = new THREE.MeshStandardMaterial({ color: OUTSIDE_TRIM, roughness: 0.5 });
 const doorMesh = new THREE.Mesh(doorGeo, doorMat);
-// shift door so hinge at (0,0,0) of group: by setting doorMesh.position.x = DOOR_WIDTH/2
-doorMesh.position.set(DOOR_WIDTH / 2, 0, -DOOR_DEPTH / 2); // slightly inside so front face aligns
-doorMesh.castShadow = true;
-doorMesh.receiveShadow = true;
-doorMesh.userData = { type: 'door' };
-doorGroup.add(doorMesh);
-
-// simple door handle (a small sphere)
+doorMesh.position.set(DOOR_WIDTH / 2, 0, -DOOR_DEPTH / 2); doorMesh.castShadow = true; doorMesh.receiveShadow = true; doorMesh.userData = { type: 'door' }; doorGroup.add(doorMesh);
 const knob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 12), new THREE.MeshStandardMaterial({ color: 0xcccc99 }));
-knob.position.set(DOOR_WIDTH - 0.22, 0, 0.03);
-doorMesh.add(knob);
+knob.position.set(DOOR_WIDTH - 0.22, 0, 0.03); doorMesh.add(knob);
+let doorOpen = false; let doorTargetRotation = 0; const DOOR_OPEN_ANGLE = -Math.PI / 2 + 0.05;
+function toggleDoor() { doorOpen = !doorOpen; doorTargetRotation = doorOpen ? DOOR_OPEN_ANGLE : 0; }
 
-// door state & animation
-let doorOpen = false;
-let doorTargetRotation = 0;
-const DOOR_OPEN_ANGLE = -Math.PI / 2 + 0.05; // open outward ~ -90 degrees (adjust)
-function toggleDoor() {
-  doorOpen = !doorOpen;
-  doorTargetRotation = doorOpen ? DOOR_OPEN_ANGLE : 0;
+// --- PDF embed on the RIGHT wall (middle) ---
+// Create a CSS3D iframe and position it centered on right wall (x = ROOM.width/2 - small offset)
+// PDF URL (served from your GitHub Pages)
+const PDF_URL = 'https://sherryz1999.github.io/museum/CatFoodDrive.pdf';
+
+// PDF frame world dimensions (match a frame size)
+const PDF_W = 3.2;   // world units width
+const PDF_H = 2.0;   // world units height
+const pdfFrameDepth = 0.06;
+
+// Create a thin WebGL backing frame for look (optional)
+const pdfBackingMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 });
+const pdfBackingGeo = new THREE.PlaneGeometry(PDF_W, PDF_H);
+const pdfBacking = new THREE.Mesh(pdfBackingGeo, pdfBackingMat);
+pdfBacking.position.set(ROOM.width / 2 - (pdfFrameDepth / 2 + 0.02), ROOM.height / 2, 0); // flush to right wall interior
+pdfBacking.rotation.y = -Math.PI / 2;
+pdfBacking.receiveShadow = true;
+pdfBacking.castShadow = false;
+scene.add(pdfBacking);
+
+// Create the CSS3D iframe container and CSS3DObject
+function createPdfCssObject(url, widthWorld, heightWorld) {
+  const el = document.createElement('div');
+  el.style.width = Math.round(widthWorld * 200) + 'px'; // pixels proportional to world size (approx)
+  el.style.height = Math.round(heightWorld * 200) + 'px';
+  el.style.overflow = 'hidden';
+  el.style.background = '#fff';
+  el.style.borderRadius = '4px';
+  el.style.boxShadow = '0 6px 18px rgba(0,0,0,0.25)';
+  el.style.pointerEvents = 'auto';
+
+  const iframe = document.createElement('iframe');
+  iframe.src = url;
+  iframe.style.width = '100%';
+  iframe.style.height = '100%';
+  iframe.style.border = '0';
+  iframe.setAttribute('allowfullscreen', '');
+  iframe.allow = 'fullscreen';
+  el.appendChild(iframe);
+
+  const cssObj = new CSS3DObject(el);
+  // position the CSS3DObject in world space at same location as pdfBacking
+  cssObj.position.copy(pdfBacking.position);
+  cssObj.rotation.copy(pdfBacking.rotation);
+  // nudge slightly in front so it's visible
+  cssObj.position.x += 0.01;
+  return cssObj;
 }
 
-// --- Image modal (click-to-enlarge) ---
-// (kept the same as earlier versions)
+const pdfCss = createPdfCssObject(PDF_URL, PDF_W, PDF_H);
+cssScene.add(pdfCss);
+
+// --- Image modal (unchanged) ---
 const imgModal = document.createElement('div');
 imgModal.id = 'image-modal';
 Object.assign(imgModal.style, { position: 'fixed', inset: 0, display: 'none', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', zIndex: 2000 });
@@ -337,10 +321,9 @@ imgModalCloseBtn.addEventListener('click', closeImageModal);
 imgModal.addEventListener('click', (e) => { if (e.target === imgModal) closeImageModal(); });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeImageModal(); });
 
-// --- Raycasting, popup and interactions ---
+// --- Raycasting, popup and interactions (unchanged logic) ---
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
-
 const popup = document.createElement('div');
 popup.id = 'desc-popup';
 Object.assign(popup.style, { position: 'fixed', pointerEvents: 'none', background: 'rgba(0,0,0,0.78)', color: '#fff', padding: '8px 10px', borderRadius: '6px', fontFamily: 'system-ui, Arial, sans-serif', fontSize: '13px', maxWidth: '320px', display: 'none', zIndex: '1000', boxShadow: '0 6px 18px rgba(0,0,0,0.35)' });
@@ -427,8 +410,14 @@ function closeVideoModal() { if (ytIframe && modal) { ytIframe.src = ''; modal.s
 if (closeBtn) closeBtn.addEventListener('click', closeVideoModal);
 if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeVideoModal(); });
 
-// --- Resize / render ---
-function onResize() { const w = window.innerWidth; const h = window.innerHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+// --- Resize handling ---
+function onResize() {
+  const w = window.innerWidth; const h = window.innerHeight;
+  renderer.setSize(w, h);
+  cssRenderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
 window.addEventListener('resize', onResize);
 onResize();
 
@@ -446,7 +435,7 @@ function animate() {
     doorGroup.rotation.y = doorTargetRotation;
   }
 
-  // gentle float
+  // gentle float of frames
   const t = performance.now() * 0.0002;
   scene.traverse((o) => {
     if (o.userData && (o.userData.type === 'video-frame' || o.userData.type === 'portrait')) {
@@ -455,9 +444,10 @@ function animate() {
   });
 
   renderer.render(scene, camera);
+  cssRenderer.render(cssScene, camera);
 }
 animate();
 
 // --- Helpful logs ---
-console.log('Applied Emerald theme to exterior walls. Door available at front (click to open).');
-console.log('If you want different emerald tones, change EMERALD_PRIMARY / EMERALD_ACCENT in src/main.js.');
+console.log('PDF embedded on right wall at', PDF_URL);
+console.log('If the PDF does not load, ensure CatFoodDrive.pdf is published at the provided URL.');
