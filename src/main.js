@@ -1,7 +1,13 @@
 // src/main.js
-// Based on commit 9860a90: Emerald exterior theme + door + portraits.
-// Added: embed a PDF at the middle of the right wall using a CSS3D iframe so the PDF (CatFoodDrive.pdf)
-// can be viewed in-place. Uses CSS3DRenderer for the iframe and keeps the WebGL scene for the room.
+// Based on commit 9860a90: Emerald exterior theme + door + portraits + PDF on right wall.
+// Fix: constrain the CSS3D iframe used for the PDF so it no longer expands to cover the viewport.
+//
+// What I changed:
+// - createPdfCssObject now computes pixels-per-world-unit and clamps sizes, sets sensible maxWidth/maxHeight
+//   (viewport-relative) and overflow:hidden so the PDF is confined to the intended frame.
+// - The CSS3DObject created stores width/height in userData so onResize can recompute pixel sizes.
+// - onResize now calls updateCssObjectsSizes to resize all CSS3D objects when the window changes size.
+// - iframe styles set to 100%/100% and pointerEvents left as auto so interaction still works.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -35,7 +41,7 @@ const cssRenderer = new CSS3DRenderer();
 cssRenderer.domElement.style.position = 'absolute';
 cssRenderer.domElement.style.top = '0';
 cssRenderer.domElement.style.left = '0';
-cssRenderer.domElement.style.pointerEvents = 'none'; // let individual iframe containers receive events
+cssRenderer.domElement.style.pointerEvents = 'none'; // outer canvas ignores pointer events
 cssRenderer.domElement.style.zIndex = '5';
 document.body.appendChild(cssRenderer.domElement);
 
@@ -49,7 +55,6 @@ camera.position.set(0, 1.6, ROOM.depth / 2 + 2.5);
 
 // --- Controls ---
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 16, 0); // preserve previous target (typo-safe below)
 controls.target.set(0, 1.6, 0);
 controls.enableDamping = true;
 controls.minDistance = 1.5;
@@ -90,10 +95,10 @@ floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = tru
 const ceiling = makePlane(ROOM.width, ROOM.depth, 0xf0f0f0); ceiling.rotation.x = Math.PI / 2; ceiling.position.y = ROOM.height; scene.add(ceiling);
 const backWall = makePlane(ROOM.width, ROOM.height, EMERALD_PRIMARY);
 backWall.position.z = -ROOM.depth / 2; backWall.position.y = ROOM.height / 2; scene.add(backWall);
-// left/right interior walls neutral
+// left/right interior walls neutral / accent
 const leftWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
 leftWall.rotation.y = Math.PI / 2; leftWall.position.x = -ROOM.width / 2; leftWall.position.y = ROOM.height / 2; scene.add(leftWall);
-const rightWall = makePlane(ROOM.depth, ROOM.height, EMERALD_ACCENT); // use accent for outside feel on right wall exterior side
+const rightWall = makePlane(ROOM.depth, ROOM.height, EMERALD_ACCENT);
 rightWall.rotation.y = -Math.PI / 2; rightWall.position.x = ROOM.width / 2; rightWall.position.y = ROOM.height / 2; scene.add(rightWall);
 
 // --- Loader ---
@@ -103,7 +108,7 @@ if (typeof loader.setCrossOrigin === 'function') {
 }
 loader.crossOrigin = 'anonymous';
 
-// --- Frame creation (unchanged) ---
+// --- Frame creation ---
 function createFrame({
   x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01,
   openingWidth = 3.2, openingHeight = 1.8,
@@ -198,7 +203,7 @@ if (portraitCount > 0) {
   const usableDepth = ROOM.depth - padding * 2 - GAP_WORLD_UNITS * 2;
   const segment = portraitCount === 1 ? 0 : usableDepth / (portraitCount - 1);
   const portraitFrameDepth = 0.06;
-  const leftX = -ROOM.width / 2 + GAP_WORLD_UNITS + portraitFrameDepth / 2;
+  const leftX = -ROOM.width / 2 + GAP_WORLD_UNITS + portraitFrameDepth / 12;
   const portraitY = ROOM.height / 2;
   for (let i = 0; i < portraitCount; i++) {
     const file = PORTRAIT_FILES[i];
@@ -216,19 +221,16 @@ if (portraitCount > 0) {
 }
 
 // --- Front wall & door (unchanged) ---
-// Door dimensions and placement code kept from commit 9860a90
 const DOOR_WIDTH = 2.2, DOOR_HEIGHT = 2.2, DOOR_DEPTH = 0.08;
 const leftSegW = (ROOM.width - DOOR_WIDTH) / 2;
 const rightSegW = leftSegW;
 const wallH = ROOM.height;
 const frontLeft = new THREE.Mesh(new THREE.PlaneGeometry(leftSegW, wallH), new THREE.MeshStandardMaterial({ color: EMERALD_PRIMARY, side: THREE.DoubleSide }));
 frontLeft.position.set(-ROOM.width / 2 + leftSegW / 2, wallH / 2, ROOM.depth / 2);
-frontLeft.rotation.y = Math.PI;
-scene.add(frontLeft);
+frontLeft.rotation.y = Math.PI; scene.add(frontLeft);
 const frontRight = new THREE.Mesh(new THREE.PlaneGeometry(rightSegW, wallH), new THREE.MeshStandardMaterial({ color: EMERALD_PRIMARY, side: THREE.DoubleSide }));
 frontRight.position.set(ROOM.width / 2 - rightSegW / 2, wallH / 2, ROOM.depth / 2);
-frontRight.rotation.y = Math.PI;
-scene.add(frontRight);
+frontRight.rotation.y = Math.PI; scene.add(frontRight);
 const doorFrameThickness = 0.06;
 const doorFrameMat = new THREE.MeshStandardMaterial({ color: OUTSIDE_TRIM, roughness: 0.6 });
 const frameGroup = new THREE.Group();
@@ -251,7 +253,6 @@ let doorOpen = false; let doorTargetRotation = 0; const DOOR_OPEN_ANGLE = -Math.
 function toggleDoor() { doorOpen = !doorOpen; doorTargetRotation = doorOpen ? DOOR_OPEN_ANGLE : 0; }
 
 // --- PDF embed on the RIGHT wall (middle) ---
-// Create a CSS3D iframe and position it centered on right wall (x = ROOM.width/2 - small offset)
 // PDF URL (served from your GitHub Pages)
 const PDF_URL = 'https://sherryz1999.github.io/museum/CatFoodDrive.pdf';
 
@@ -273,34 +274,74 @@ scene.add(pdfBacking);
 // Create the CSS3D iframe container and CSS3DObject
 function createPdfCssObject(url, widthWorld, heightWorld) {
   const el = document.createElement('div');
-  el.style.width = Math.round(widthWorld * 200) + 'px'; // pixels proportional to world size (approx)
-  el.style.height = Math.round(heightWorld * 200) + 'px';
+  // compute pixels per world unit (clamped) to keep sizes sensible across devices
+  const pixelsPerUnit = Math.max(110, Math.min(220, Math.floor(window.devicePixelRatio * 140)));
+  const pxW = Math.round(widthWorld * pixelsPerUnit);
+  const pxH = Math.round(heightWorld * pixelsPerUnit);
+
+  // set base size and sensible viewport-relative max sizes
+  el.style.width = pxW + 'px';
+  el.style.height = pxH + 'px';
   el.style.overflow = 'hidden';
   el.style.background = '#fff';
   el.style.borderRadius = '4px';
   el.style.boxShadow = '0 6px 18px rgba(0,0,0,0.25)';
   el.style.pointerEvents = 'auto';
+  el.style.boxSizing = 'border-box';
+
+  // keep a responsive cap so the iframe can't be larger than a reasonable portion of viewport
+  const maxW = Math.round(window.innerWidth * 0.6); // at most 60% viewport width
+  const maxH = Math.round(window.innerHeight * 0.72); // at most 72% viewport height
+  el.style.maxWidth = maxW + 'px';
+  el.style.maxHeight = maxH + 'px';
 
   const iframe = document.createElement('iframe');
   iframe.src = url;
   iframe.style.width = '100%';
   iframe.style.height = '100%';
   iframe.style.border = '0';
-  iframe.setAttribute('allowfullscreen', '');
+  iframe.style.display = 'block';
   iframe.allow = 'fullscreen';
+  iframe.setAttribute('allowfullscreen', '');
+  // Do not set position:fixed inside iframe (we can't), but container overflow:hidden will clip content
   el.appendChild(iframe);
 
   const cssObj = new CSS3DObject(el);
+  // store world dimensions so we can recompute on resize
+  cssObj.userData.widthWorld = widthWorld;
+  cssObj.userData.heightWorld = heightWorld;
+  cssObj.userData.pixelsPerUnit = pixelsPerUnit;
+
   // position the CSS3DObject in world space at same location as pdfBacking
   cssObj.position.copy(pdfBacking.position);
   cssObj.rotation.copy(pdfBacking.rotation);
   // nudge slightly in front so it's visible
   cssObj.position.x += 0.01;
+
   return cssObj;
 }
 
 const pdfCss = createPdfCssObject(PDF_URL, PDF_W, PDF_H);
 cssScene.add(pdfCss);
+
+// Update function to resize css objects when window changes (keeps iframe from growing too large)
+function updateCssObjectsSizes() {
+  const pixelsPerUnit = Math.max(110, Math.min(220, Math.floor(window.devicePixelRatio * 140)));
+  cssScene.children.forEach((c) => {
+    if (!c.element) return;
+    const wWorld = c.userData.widthWorld || 3.2;
+    const hWorld = c.userData.heightWorld || 2.0;
+    const pxW = Math.round(wWorld * pixelsPerUnit);
+    const pxH = Math.round(hWorld * pixelsPerUnit);
+    c.element.style.width = pxW + 'px';
+    c.element.style.height = pxH + 'px';
+    // reapply viewport caps
+    const maxW = Math.round(window.innerWidth * 0.6);
+    const maxH = Math.round(window.innerHeight * 0.72);
+    c.element.style.maxWidth = maxW + 'px';
+    c.element.style.maxHeight = maxH + 'px';
+  });
+}
 
 // --- Image modal (unchanged) ---
 const imgModal = document.createElement('div');
@@ -321,7 +362,7 @@ imgModalCloseBtn.addEventListener('click', closeImageModal);
 imgModal.addEventListener('click', (e) => { if (e.target === imgModal) closeImageModal(); });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeImageModal(); });
 
-// --- Raycasting, popup and interactions (unchanged logic) ---
+// --- Raycasting, popup and interactions (unchanged) ---
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const popup = document.createElement('div');
@@ -417,6 +458,8 @@ function onResize() {
   cssRenderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  // update CSS3D object sizes so the PDF iframe stays constrained
+  updateCssObjectsSizes();
 }
 window.addEventListener('resize', onResize);
 onResize();
@@ -450,4 +493,4 @@ animate();
 
 // --- Helpful logs ---
 console.log('PDF embedded on right wall at', PDF_URL);
-console.log('If the PDF does not load, ensure CatFoodDrive.pdf is published at the provided URL.');
+console.log('If the PDF does not load or is still too large, try lowering the pixelsPerUnit clamp (in src/main.js).');
