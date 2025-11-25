@@ -514,4 +514,4 @@ function animate() {
 animate();
 
 // --- Helpful logs ---
-console.log('Embedded Google Slides (94x100 px) on right wall. If interaction doesn't work, try clicking the slide area or reloading the page.');
+console.log('Embedded Google Slides (94x100 px) on right wall. If interaction does not work, try clicking the slide area or reloading the page.');
