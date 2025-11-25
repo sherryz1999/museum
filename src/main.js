@@ -1,12 +1,10 @@
 // src/main.js
-// Museum scene — apply Emerald HS exterior color theme to outside walls and add an interactive front door.
-// - Front wall is split into left/right segments with a central door opening.
-// - Door is a pivoting mesh (hinge on left) that opens/closes on click with a smooth animation.
-// - Exterior wall materials use an emerald-inspired palette sampled from the provided image.
-// - Uses the same scene/interaction code as before (portraits, modal, hover, etc.)
+// Museum scene — Emerald exterior theme, portraits, door, and a CSS3D scene embedding
+// a Google Slides iframe on the right wall at pixel size 94x100.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
+import { CSS3DRenderer, CSS3DObject } from 'https://unpkg.com/three@0.159.0/examples/jsm/renderers/CSS3DRenderer.js';
 
 const canvasContainer = document.body;
 
@@ -24,14 +22,27 @@ const ROOM = { width: 20, height: 4, depth: 12 };
 // Gap from wall
 const GAP_WORLD_UNITS = 1;
 
-// --- Renderer ---
+// --- Renderer (WebGL) ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// --- Scene & Camera ---
+// --- CSS3D renderer (for embedding iframes/slides) ---
+const cssRenderer = new CSS3DRenderer();
+cssRenderer.domElement.style.position = 'absolute';
+cssRenderer.domElement.style.top = '0';
+cssRenderer.domElement.style.left = '0';
+cssRenderer.domElement.style.zIndex = '5';
+// let the CSS3D renderer itself ignore pointer events; individual iframe containers will accept them
+cssRenderer.domElement.style.pointerEvents = 'none';
+document.body.appendChild(cssRenderer.domElement);
+
+// CSS3D scene (separate scene for DOM objects)
+const cssScene = new THREE.Scene();
+
+// --- Scene & Camera (WebGL) ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xf8f8f8);
 const camera = new THREE.PerspectiveCamera(60, 2, 0.1, 200);
@@ -68,13 +79,11 @@ fill.castShadow = false;
 scene.add(fill);
 
 // --- Palette (approx. from Emerald HS hero image) ---
-// Primary emerald tone, secondary trim and warm accent
 const EMERALD_PRIMARY = 0x0f6b58; // deep emerald
 const EMERALD_ACCENT = 0x7fcfb1; // lighter accent
-const OUTSIDE_TRIM = 0x734b2b; // warm wood/bronze accent, used on door/frame
+const OUTSIDE_TRIM = 0x734b2b; // warm wood/bronze accent
 
 // --- Room planes ---
-// makePlane returns a Mesh positioned at origin; call-site positions it
 function makePlane(w, h, color) {
   const mat = new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide });
   const geo = new THREE.PlaneGeometry(w, h);
@@ -92,15 +101,12 @@ ceiling.rotation.x = Math.PI / 2;
 ceiling.position.y = ROOM.height;
 scene.add(ceiling);
 
-const backWall = makePlane(ROOM.width, ROOM.height, EMERALD_PRIMARY); // outside/back painted emerald
+const backWall = makePlane(ROOM.width, ROOM.height, EMERALD_PRIMARY);
 backWall.position.z = -ROOM.depth / 2;
 backWall.position.y = ROOM.height / 2;
 scene.add(backWall);
 
-// Front wall will be built as left/right segments around the door to create an opening
-// so we do not create `frontWall` as a single plane here.
-
-// Left and right interior walls — keep interior neutral (light)
+// Left and right interior walls
 const leftWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
 leftWall.rotation.y = Math.PI / 2;
 leftWall.position.x = -ROOM.width / 2;
@@ -120,7 +126,7 @@ if (typeof loader.setCrossOrigin === 'function') {
 }
 loader.crossOrigin = 'anonymous';
 
-// --- Frame creation (same as before), portraits will be isPortrait=true to avoid casting shadows ---
+// --- Frame creation (for portraits and center frames) ---
 function createFrame({
   x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01,
   openingWidth = 3.2, openingHeight = 1.8,
@@ -152,7 +158,6 @@ function createFrame({
 
   const frameMat = new THREE.MeshStandardMaterial({ color: 0x5a3b2a, roughness: 0.6, metalness: 0.02 });
   const frameMesh = new THREE.Mesh(frameGeo, frameMat);
-  // frames only cast shadows if not portraits
   frameMesh.castShadow = !isPortrait;
   frameMesh.receiveShadow = true;
   frameMesh.position.set(0, 0, -frameDepth / 2);
@@ -286,39 +291,28 @@ frameGroup.rotation.y = Math.PI;
 scene.add(frameGroup);
 
 // Door mesh (pivoting on the left edge)
-// We'll make a doorGroup with pivot at hinge (left edge), door mesh offset so hinge sits at group origin.
 const doorGroup = new THREE.Group();
-doorGroup.position.set(-DOOR_WIDTH / 2, DOOR_HEIGHT / 2, ROOM.depth / 2 + 0.005); // hinge world pos (left edge)
-doorGroup.rotation.y = 0; // closed rotation angle = 0
+doorGroup.position.set(-DOOR_WIDTH / 2, DOOR_HEIGHT / 2, ROOM.depth / 2 + 0.005);
+doorGroup.rotation.y = 0;
 scene.add(doorGroup);
 
-// door geometry centered at doorWidth/2 to the right of hinge
 const doorGeo = new THREE.BoxGeometry(DOOR_WIDTH, DOOR_HEIGHT, DOOR_DEPTH);
 const doorMat = new THREE.MeshStandardMaterial({ color: OUTSIDE_TRIM, roughness: 0.5 });
 const doorMesh = new THREE.Mesh(doorGeo, doorMat);
-// shift door so hinge at (0,0,0) of group: by setting doorMesh.position.x = DOOR_WIDTH/2
-doorMesh.position.set(DOOR_WIDTH / 2, 0, -DOOR_DEPTH / 2); // slightly inside so front face aligns
+doorMesh.position.set(DOOR_WIDTH / 2, 0, -DOOR_DEPTH / 2);
 doorMesh.castShadow = true;
 doorMesh.receiveShadow = true;
 doorMesh.userData = { type: 'door' };
 doorGroup.add(doorMesh);
 
-// simple door handle (a small sphere)
 const knob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 12), new THREE.MeshStandardMaterial({ color: 0xcccc99 }));
 knob.position.set(DOOR_WIDTH - 0.22, 0, 0.03);
 doorMesh.add(knob);
 
-// door state & animation
-let doorOpen = false;
-let doorTargetRotation = 0;
-const DOOR_OPEN_ANGLE = -Math.PI / 2 + 0.05; // open outward ~ -90 degrees (adjust)
-function toggleDoor() {
-  doorOpen = !doorOpen;
-  doorTargetRotation = doorOpen ? DOOR_OPEN_ANGLE : 0;
-}
+let doorOpen = false; let doorTargetRotation = 0; const DOOR_OPEN_ANGLE = -Math.PI / 2 + 0.05;
+function toggleDoor() { doorOpen = !doorOpen; doorTargetRotation = doorOpen ? DOOR_OPEN_ANGLE : 0; }
 
 // --- Image modal (click-to-enlarge) ---
-// (kept the same as earlier versions)
 const imgModal = document.createElement('div');
 imgModal.id = 'image-modal';
 Object.assign(imgModal.style, { position: 'fixed', inset: 0, display: 'none', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', zIndex: 2000 });
@@ -340,7 +334,6 @@ window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeImageMo
 // --- Raycasting, popup and interactions ---
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
-
 const popup = document.createElement('div');
 popup.id = 'desc-popup';
 Object.assign(popup.style, { position: 'fixed', pointerEvents: 'none', background: 'rgba(0,0,0,0.78)', color: '#fff', padding: '8px 10px', borderRadius: '6px', fontFamily: 'system-ui, Arial, sans-serif', fontSize: '13px', maxWidth: '320px', display: 'none', zIndex: '1000', boxShadow: '0 6px 18px rgba(0,0,0,0.35)' });
@@ -378,7 +371,7 @@ function onPointerDown(event) {
   for (const it of intersects) {
     const obj = it.object;
     if (obj.userData && obj.userData.type === 'portrait') {
-      const src = obj.userData.imageUrl || '';
+      const src = obj.userData.imageUrl || (obj.userData._group && obj.userData._group.userData && obj.userData._group.userData.imageUrl) || '';
       openImageModal(src, obj.userData.filename || '');
       return;
     }
@@ -394,7 +387,7 @@ function onPointerDown(event) {
 }
 window.addEventListener('pointerdown', onPointerDown);
 
-// double-click to edit portrait descriptions
+// double-click editing of descriptions
 function onDoubleClick(event) {
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -411,6 +404,7 @@ function onDoubleClick(event) {
         PORTRAIT_DESCRIPTIONS[filename] = updated;
         obj.userData.description = updated;
         showPopup(updated, event.clientX, event.clientY);
+        console.log('Updated description for', filename);
       }
       break;
     }
@@ -422,17 +416,77 @@ window.addEventListener('dblclick', onDoubleClick);
 const modal = document.getElementById('video-modal');
 const ytIframe = document.getElementById('yt-iframe');
 const closeBtn = document.getElementById('close-btn');
-function openVideoModal(videoId) { if (ytIframe && modal) { ytIframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`; modal.setAttribute('aria-hidden', 'false'); document.body.style.overflow = 'hidden'; } else { window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank', 'noopener'); } }
-function closeVideoModal() { if (ytIframe && modal) { ytIframe.src = ''; modal.setAttribute('aria-hidden', 'true'); document.body.style.overflow = ''; } }
+
+function openVideoModal(videoId) {
+  if (ytIframe && modal) {
+    ytIframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  } else {
+    window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank', 'noopener');
+  }
+}
+function closeVideoModal() {
+  if (ytIframe && modal) {
+    ytIframe.src = '';
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+}
 if (closeBtn) closeBtn.addEventListener('click', closeVideoModal);
 if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeVideoModal(); });
 
+// --- CSS3D embed: Google Slides iframe on right wall (94x100 px) ---
+// Create a small DOM container sized 94x100 and attach the published slides iframe.
+// The CSS3D object is positioned slightly in front of the right wall.
+
+const SLIDE_IFRAME_SRC = 'https://docs.google.com/presentation/d/e/2PACX-1vT0SUWPd9MwElcdH1FiH5AcQ8_oiqvHqg4xa_tnSB9lVh34-TzYnae4Ji5jPj_XLQ/pubembed?start=true&loop=false&delayms=3000';
+const IFRAME_PX_W = 94;
+const IFRAME_PX_H = 100;
+
+const slideContainer = document.createElement('div');
+slideContainer.style.width = IFRAME_PX_W + 'px';
+slideContainer.style.height = IFRAME_PX_H + 'px';
+slideContainer.style.overflow = 'hidden';
+slideContainer.style.border = '0';
+slideContainer.style.boxSizing = 'border-box';
+slideContainer.style.pointerEvents = 'auto'; // allow interaction inside the iframe
+slideContainer.style.background = '#fff';
+slideContainer.style.borderRadius = '3px';
+slideContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.18)';
+
+const slideIframe = document.createElement('iframe');
+slideIframe.src = SLIDE_IFRAME_SRC;
+slideIframe.frameBorder = '0';
+slideIframe.width = String(IFRAME_PX_W);
+slideIframe.height = String(IFRAME_PX_H);
+slideIframe.allowFullscreen = true;
+slideIframe.setAttribute('mozallowfullscreen', 'true');
+slideIframe.setAttribute('webkitallowfullscreen', 'true');
+slideIframe.style.display = 'block';
+slideIframe.style.width = '100%';
+slideIframe.style.height = '100%';
+slideIframe.style.border = '0';
+slideContainer.appendChild(slideIframe);
+
+const slideCssObj = new CSS3DObject(slideContainer);
+// position it at the right wall center and rotated to face inward
+slideCssObj.position.set(ROOM.width / 2 - 0.01, ROOM.height / 2, 0); // slight nudge in front of wall
+slideCssObj.rotation.y = -Math.PI / 2;
+cssScene.add(slideCssObj);
+
 // --- Resize / render ---
-function onResize() { const w = window.innerWidth; const h = window.innerHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+function onResize() {
+  const w = window.innerWidth; const h = window.innerHeight;
+  renderer.setSize(w, h);
+  cssRenderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
 window.addEventListener('resize', onResize);
 onResize();
 
-// --- Animation loop (door animation included) ---
+// --- Animation loop ---
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
@@ -446,7 +500,7 @@ function animate() {
     doorGroup.rotation.y = doorTargetRotation;
   }
 
-  // gentle float
+  // gentle float for frames
   const t = performance.now() * 0.0002;
   scene.traverse((o) => {
     if (o.userData && (o.userData.type === 'video-frame' || o.userData.type === 'portrait')) {
@@ -455,9 +509,9 @@ function animate() {
   });
 
   renderer.render(scene, camera);
+  cssRenderer.render(cssScene, camera);
 }
 animate();
 
 // --- Helpful logs ---
-console.log('Applied Emerald theme to exterior walls. Door available at front (click to open).');
-console.log('If you want different emerald tones, change EMERALD_PRIMARY / EMERALD_ACCENT in src/main.js.');
+console.log('Embedded Google Slides (94x100 px) on right wall. If interaction doesn't work, try clicking the slide area or reloading the page.');
