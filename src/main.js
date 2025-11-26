@@ -378,7 +378,7 @@ const rightFrameGroup = rightFrameThumb && rightFrameThumb.userData && rightFram
 // Iframe pixel size requested: 94 x 100
 const IFRAME_PX_W = 94;
 const IFRAME_PX_H = 100;
-const SLIDE_IFRAME_SRC = 'https://docs.google.com/presentation/d/e/2PACX-1vT0SUWPd9MwElcdH1FiH5AcQ8_oiqvHqg4xa_tnSB9lVh34-TzYnae4Ji5jPj_XLQ/pubembed?start=true&loop=false&delayms=3000';
+const SLIDE_IFRAME_SRC = 'https://docs.google.com/presentation/d/e/2PACX-1vT0SUWPd9MwElcdH1FiH5AcQ8_oiqvHqg4xa_tnSB9lVh34-TzYnae4Ji5jPj_XLQ/embed?start=true&loop=false&delayms=3000';
 
 if (rightFrameGroup) {
   // create DOM container and iframe
