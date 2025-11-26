@@ -345,7 +345,7 @@ const frameDepth = 0.06;
 createFrame({
   x: ROOM.width / 2 - (frameDepth / 2 + 0.02), // match previous backing offset
   y: ROOM.height / 2,
-  z: -ROOM.depth / 2 ,
+  z: 0 ,
   openingWidth: RIGHT_FRAME_W,
   openingHeight: RIGHT_FRAME_H,
   frameDepth: frameDepth,
