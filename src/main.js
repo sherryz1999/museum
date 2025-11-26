@@ -293,7 +293,7 @@ const doorMesh = new THREE.Mesh(doorGeo, doorMat);
 doorMesh.position.set(DOOR_WIDTH / 2, 0, -DOOR_DEPTH / 2); doorMesh.castShadow = true; doorMesh.receiveShadow = true; doorMesh.userData = { type: 'door' }; doorGroup.add(doorMesh);
 
 const knob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 12), new THREE.MeshStandardMaterial({ color: 0xcccc99 }));
-knob.position.set(DOOR_WIDTH + 0.22, 0, 0.03); doorMesh.add(knob);
+knob.position.set(DOOR_WIDTH/2 - 0.2, 0, 0.03); doorMesh.add(knob);
 
 let doorOpen = false; let doorTargetRotation = 0; const DOOR_OPEN_ANGLE = -Math.PI / 2 + 0.05;
 function toggleDoor() { doorOpen = !doorOpen; doorTargetRotation = doorOpen ? DOOR_OPEN_ANGLE : 0; }
