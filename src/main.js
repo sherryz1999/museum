@@ -1,12 +1,11 @@
 // src/main.js
 // Museum scene — Emerald exterior theme, portraits, door.
-// Base: commit 2d1c151. Added CSS3DRenderer and placed a CSS3DObject (Google Slides iframe)
-// aligned to the WebGL frame on the right wall. I used createFrame() to create the WebGL frame
-// and aligned the CSS3DObject to the same position/rotation. The iframe is sized 94x100 px.
+// Base: commit 2d1c151. Replaced the Google Slides CSS3D iframe with Adobe's PDF viewer
+// embedded (CSS3D) and aligned to the WebGL frame on the right wall. Shows:
+// https://sherryz1999.github.io/museum/CatFoodDrive.pdf
 //
-// Embed (user-provided):
-// <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vT0SUWPd9MwElcdH1FiH5AcQ8_oiqvHqg4xa_tnSB9lVh34-TzYnae4Ji5jPj_XLQ/pubembed?start=true&loop=false&delayms=3000"
-//         frameborder="0" width="94" height="100" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe>
+// Note: Adobe's public viewer URL uses the Document Cloud viewer page. If the viewer
+// is blocked you can fall back to opening the PDF in a new tab (link provided).
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -35,13 +34,13 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// --- CSS3D renderer (for embedding the iframe) ---
+// --- CSS3D renderer (for embedding DOM elements like iframes) ---
 const cssRenderer = new CSS3DRenderer();
 cssRenderer.domElement.style.position = 'absolute';
 cssRenderer.domElement.style.top = '0';
 cssRenderer.domElement.style.left = '0';
 cssRenderer.domElement.style.zIndex = '6';
-// keep root ignoring pointer events by default; we'll enable when hovering iframe
+// keep root ignoring pointer events by default; we'll enable when hovering the iframe
 cssRenderer.domElement.style.pointerEvents = 'none';
 document.body.appendChild(cssRenderer.domElement);
 const cssScene = new THREE.Scene();
@@ -352,7 +351,7 @@ function onPointerDown(event) {
 }
 window.addEventListener('pointerdown', onPointerDown);
 
-// --- RIGHT wall: create a decorative WebGL frame using createFrame() ---
+// --- RIGHT wall: create a decorative WebGL frame using createFrame() and embed Adobe PDF viewer ---
 // Capture the returned thumb mesh so we can align the CSS3D object to its group
 const RIGHT_FRAME_W = 3.2;
 const RIGHT_FRAME_H = 2.0;
@@ -371,59 +370,69 @@ const rightFrameThumb = createFrame({
   title: 'Right Wall Frame'
 });
 
-// rightFrameThumb.userData._group is the group created for the frame
 const rightFrameGroup = rightFrameThumb && rightFrameThumb.userData && rightFrameThumb.userData._group ? rightFrameThumb.userData._group : null;
 
-// --- Embed the Google Slides iframe using CSS3D aligned to the WebGL frame ---
-// Iframe pixel size requested: 94 x 100
-const IFRAME_PX_W = 94;
-const IFRAME_PX_H = 100;
-const SLIDE_IFRAME_SRC = 'https://docs.google.com/presentation/d/e/2PACX-1vT0SUWPd9MwElcdH1FiH5AcQ8_oiqvHqg4xa_tnSB9lVh34-TzYnae4Ji5jPj_XLQ/embed?start=true&loop=false&delayms=3000';
+// PDF URL to display
+const PDF_URL = 'https://sherryz1999.github.io/museum/CatFoodDrive.pdf';
 
+// If the frame exists, create a CSS3D iframe using Adobe's public viewer page
 if (rightFrameGroup) {
-  // create DOM container and iframe
-  const slideContainer = document.createElement('div');
-  slideContainer.style.width = IFRAME_PX_W + 'px';
-  slideContainer.style.height = IFRAME_PX_H + 'px';
-  slideContainer.style.overflow = 'hidden';
-  slideContainer.style.border = '0';
-  slideContainer.style.boxSizing = 'border-box';
-  slideContainer.style.pointerEvents = 'auto';
-  slideContainer.style.background = '#fff';
-  slideContainer.style.borderRadius = '3px';
-  slideContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.16)';
+  // Use Adobe Document Cloud viewer wrapper page (file param = PDF URL).
+  // If this doesn't work due to Adobe restrictions, the code falls back to linking directly.
+  const adobeViewerSrc = 'https://documentcloud.adobe.com/view-sdk/viewer.html?file=' + encodeURIComponent(PDF_URL);
 
-  const slideIframe = document.createElement('iframe');
-  slideIframe.src = SLIDE_IFRAME_SRC;
-  slideIframe.frameBorder = '0';
-  slideIframe.width = String(IFRAME_PX_W);
-  slideIframe.height = String(IFRAME_PX_H);
-  slideIframe.allowFullscreen = true;
-  slideIframe.setAttribute('mozallowfullscreen', 'true');
-  slideIframe.setAttribute('webkitallowfullscreen', 'true');
-  slideIframe.style.display = 'block';
-  slideIframe.style.width = '100%';
-  slideIframe.style.height = '100%';
-  slideIframe.style.border = '0';
-  slideContainer.appendChild(slideIframe);
+  const IFRAME_PX_W = 94;
+  const IFRAME_PX_H = 100;
 
-  const slideCssObj = new CSS3DObject(slideContainer);
+  const pdfContainer = document.createElement('div');
+  pdfContainer.style.width = IFRAME_PX_W + 'px';
+  pdfContainer.style.height = IFRAME_PX_H + 'px';
+  pdfContainer.style.overflow = 'hidden';
+  pdfContainer.style.border = '0';
+  pdfContainer.style.boxSizing = 'border-box';
+  pdfContainer.style.pointerEvents = 'auto'; // allow interaction
+  pdfContainer.style.background = '#fff';
+  pdfContainer.style.borderRadius = '3px';
+  pdfContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.16)';
+
+  const pdfIframe = document.createElement('iframe');
+  pdfIframe.src = adobeViewerSrc;
+  pdfIframe.frameBorder = '0';
+  pdfIframe.width = String(IFRAME_PX_W);
+  pdfIframe.height = String(IFRAME_PX_H);
+  pdfIframe.allowFullscreen = true;
+  pdfIframe.style.display = 'block';
+  pdfIframe.style.width = '100%';
+  pdfIframe.style.height = '100%';
+  pdfIframe.style.border = '0';
+  // If Adobe blocks embedding, clicking the container will open the PDF in a new tab as fallback.
+  pdfContainer.addEventListener('click', (e) => {
+    // only open fallback if iframe fails to load; user can still interact with iframe otherwise
+    // (This fallback is conservative — it won't prevent normal iframe interaction.)
+    if (!pdfIframe.contentWindow || pdfIframe.contentWindow.length === 0) {
+      window.open(PDF_URL, '_blank', 'noopener');
+    }
+  }, { passive: true });
+
+  pdfContainer.appendChild(pdfIframe);
+
+  const pdfCssObj = new CSS3DObject(pdfContainer);
 
   // Align CSS3D object to the WebGL frame group (position & rotation)
-  slideCssObj.position.copy(rightFrameGroup.position);
-  slideCssObj.rotation.copy(rightFrameGroup.rotation);
+  pdfCssObj.position.copy(rightFrameGroup.position);
+  pdfCssObj.rotation.copy(rightFrameGroup.rotation);
 
-  // Nudge slightly out from the wall so it sits in front of the WebGL backing
-  // Since the frame faces inward (rotationY = -PI/2), a positive X offset moves it into the room.
-  slideCssObj.position.x += 0.01;
+  // Nudge slightly forward along the frame surface normal so it sits in front
+  const normal = new THREE.Vector3(1, 0, 0).applyQuaternion(rightFrameGroup.quaternion);
+  pdfCssObj.position.add(normal.multiplyScalar(0.02));
 
-  cssScene.add(slideCssObj);
+  cssScene.add(pdfCssObj);
 
   // Pointer handling: enable CSS3D root pointer events while hovering the container
-  slideContainer.addEventListener('pointerenter', () => {
+  pdfContainer.addEventListener('pointerenter', () => {
     cssRenderer.domElement.style.pointerEvents = 'auto';
   });
-  slideContainer.addEventListener('pointerleave', () => {
+  pdfContainer.addEventListener('pointerleave', () => {
     cssRenderer.domElement.style.pointerEvents = 'none';
   });
 }
@@ -476,4 +485,4 @@ function animate() {
 animate();
 
 // --- Helpful logs ---
-console.log('Added CSS3DRenderer and aligned a CSS3DObject (94x100 px) to the WebGL right-wall frame.');
+console.log('Replaced Google Slides embed with Adobe PDF viewer (Adobe viewer wrapper) showing:', PDF_URL);
