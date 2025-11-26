@@ -1,9 +1,16 @@
 // src/main.js
 // Museum scene — Emerald exterior theme, portraits, door.
-// Change: based on commit 2d1c151. Use createFrame() to create a WebGL frame on the right wall.
+// Base: commit 2d1c151. Added CSS3DRenderer and placed a CSS3DObject (Google Slides iframe)
+// aligned to the WebGL frame on the right wall. I used createFrame() to create the WebGL frame
+// and aligned the CSS3DObject to the same position/rotation. The iframe is sized 94x100 px.
+//
+// Embed (user-provided):
+// <iframe src="https://docs.google.com/presentation/d/e/2PACX-1vT0SUWPd9MwElcdH1FiH5AcQ8_oiqvHqg4xa_tnSB9lVh34-TzYnae4Ji5jPj_XLQ/pubembed?start=true&loop=false&delayms=3000"
+//         frameborder="0" width="94" height="100" allowfullscreen="true" mozallowfullscreen="true" webkitallowfullscreen="true"></iframe>
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
+import { CSS3DRenderer, CSS3DObject } from 'https://unpkg.com/three@0.159.0/examples/jsm/renderers/CSS3DRenderer.js';
 
 const canvasContainer = document.body;
 
@@ -21,12 +28,23 @@ const ROOM = { width: 20, height: 4, depth: 12 };
 // Gap from wall
 const GAP_WORLD_UNITS = 1;
 
-// --- Renderer ---
+// --- Renderer (WebGL) ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
+
+// --- CSS3D renderer (for embedding the iframe) ---
+const cssRenderer = new CSS3DRenderer();
+cssRenderer.domElement.style.position = 'absolute';
+cssRenderer.domElement.style.top = '0';
+cssRenderer.domElement.style.left = '0';
+cssRenderer.domElement.style.zIndex = '6';
+// keep root ignoring pointer events by default; we'll enable when hovering iframe
+cssRenderer.domElement.style.pointerEvents = 'none';
+document.body.appendChild(cssRenderer.domElement);
+const cssScene = new THREE.Scene();
 
 // --- Scene & Camera ---
 const scene = new THREE.Scene();
@@ -42,7 +60,6 @@ controls.minDistance = 1.5;
 controls.maxDistance = 50;
 
 // --- Lighting ---
-// Soft ambient + directional + hemisphere + fill (portraits set to not cast shadows)
 const ambient = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambient);
 
@@ -196,7 +213,7 @@ createFrame({ x: 0, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openin
 createFrame({ x: 4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, title: 'Art 2', rotationY: 0 });
 createFrame({ x: -4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, title: 'Art 1', rotationY: 0 });
 
-// --- Portraits on left wall (unchanged logic, centered vertically and evenly spaced) ---
+// --- Portraits on left wall (unchanged logic) ---
 const portraitCount = PORTRAIT_FILES.length;
 if (portraitCount > 0) {
   const padding = 0.6;
@@ -336,24 +353,80 @@ function onPointerDown(event) {
 window.addEventListener('pointerdown', onPointerDown);
 
 // --- RIGHT wall: create a decorative WebGL frame using createFrame() ---
+// Capture the returned thumb mesh so we can align the CSS3D object to its group
 const RIGHT_FRAME_W = 3.2;
 const RIGHT_FRAME_H = 2.0;
-const frameDepth = 0.06;
+const RIGHT_FRAME_DEPTH = 0.06;
 
-// Use createFrame to make the right-wall frame. Position it flush with the right interior wall
-// (small inward offset to avoid z-fighting).
-createFrame({
-  x: ROOM.width / 2 - (frameDepth / 2 + 0.02), // match previous backing offset
+const rightFrameThumb = createFrame({
+  x: ROOM.width / 2 - (RIGHT_FRAME_DEPTH / 2 + 0.02), // flush with interior right wall
   y: ROOM.height / 2,
-  z: 0 ,
+  z: 0,
   openingWidth: RIGHT_FRAME_W,
   openingHeight: RIGHT_FRAME_H,
-  frameDepth: frameDepth,
+  frameDepth: RIGHT_FRAME_DEPTH,
   frameBorderThickness: 0.04,
   matInset: 0.04,
   rotationY: -Math.PI / 2,
   title: 'Right Wall Frame'
 });
+
+// rightFrameThumb.userData._group is the group created for the frame
+const rightFrameGroup = rightFrameThumb && rightFrameThumb.userData && rightFrameThumb.userData._group ? rightFrameThumb.userData._group : null;
+
+// --- Embed the Google Slides iframe using CSS3D aligned to the WebGL frame ---
+// Iframe pixel size requested: 94 x 100
+const IFRAME_PX_W = 94;
+const IFRAME_PX_H = 100;
+const SLIDE_IFRAME_SRC = 'https://docs.google.com/presentation/d/e/2PACX-1vT0SUWPd9MwElcdH1FiH5AcQ8_oiqvHqg4xa_tnSB9lVh34-TzYnae4Ji5jPj_XLQ/pubembed?start=true&loop=false&delayms=3000';
+
+if (rightFrameGroup) {
+  // create DOM container and iframe
+  const slideContainer = document.createElement('div');
+  slideContainer.style.width = IFRAME_PX_W + 'px';
+  slideContainer.style.height = IFRAME_PX_H + 'px';
+  slideContainer.style.overflow = 'hidden';
+  slideContainer.style.border = '0';
+  slideContainer.style.boxSizing = 'border-box';
+  slideContainer.style.pointerEvents = 'auto';
+  slideContainer.style.background = '#fff';
+  slideContainer.style.borderRadius = '3px';
+  slideContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.16)';
+
+  const slideIframe = document.createElement('iframe');
+  slideIframe.src = SLIDE_IFRAME_SRC;
+  slideIframe.frameBorder = '0';
+  slideIframe.width = String(IFRAME_PX_W);
+  slideIframe.height = String(IFRAME_PX_H);
+  slideIframe.allowFullscreen = true;
+  slideIframe.setAttribute('mozallowfullscreen', 'true');
+  slideIframe.setAttribute('webkitallowfullscreen', 'true');
+  slideIframe.style.display = 'block';
+  slideIframe.style.width = '100%';
+  slideIframe.style.height = '100%';
+  slideIframe.style.border = '0';
+  slideContainer.appendChild(slideIframe);
+
+  const slideCssObj = new CSS3DObject(slideContainer);
+
+  // Align CSS3D object to the WebGL frame group (position & rotation)
+  slideCssObj.position.copy(rightFrameGroup.position);
+  slideCssObj.rotation.copy(rightFrameGroup.rotation);
+
+  // Nudge slightly out from the wall so it sits in front of the WebGL backing
+  // Since the frame faces inward (rotationY = -PI/2), a positive X offset moves it into the room.
+  slideCssObj.position.x += 0.01;
+
+  cssScene.add(slideCssObj);
+
+  // Pointer handling: enable CSS3D root pointer events while hovering the container
+  slideContainer.addEventListener('pointerenter', () => {
+    cssRenderer.domElement.style.pointerEvents = 'auto';
+  });
+  slideContainer.addEventListener('pointerleave', () => {
+    cssRenderer.domElement.style.pointerEvents = 'none';
+  });
+}
 
 // --- Modal & center frame video functions (unchanged) ---
 const modal = document.getElementById('video-modal');
@@ -365,10 +438,17 @@ if (closeBtn) closeBtn.addEventListener('click', closeVideoModal);
 if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeVideoModal(); });
 
 // --- Resize / render ---
-function onResize() { const w = window.innerWidth; const h = window.innerHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+function onResize() {
+  const w = window.innerWidth; const h = window.innerHeight;
+  renderer.setSize(w, h);
+  cssRenderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
 window.addEventListener('resize', onResize);
 onResize();
 
+// --- Animation loop (render both scenes) ---
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
@@ -391,8 +471,9 @@ function animate() {
   });
 
   renderer.render(scene, camera);
+  cssRenderer.render(cssScene, camera);
 }
 animate();
 
 // --- Helpful logs ---
-console.log('Created right-wall frame using createFrame() (base: commit 2d1c151).');
+console.log('Added CSS3DRenderer and aligned a CSS3DObject (94x100 px) to the WebGL right-wall frame.');
