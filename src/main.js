@@ -1,6 +1,6 @@
 // src/main.js
 // Museum scene — Emerald exterior theme, portraits, door.
-// Change: removed the Google Slides CSS3D iframe; kept a WebGL frame on the right wall instead.
+// Change: based on commit 2d1c151. Use createFrame() to create a WebGL frame on the right wall.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -84,16 +84,10 @@ backWall.position.z = -ROOM.depth / 2; backWall.position.y = ROOM.height / 2; sc
 
 // Left and right interior walls — keep interior neutral (light)
 const leftWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
-leftWall.rotation.y = Math.PI / 2;
-leftWall.position.x = -ROOM.width / 2;
-leftWall.position.y = ROOM.height / 2;
-scene.add(leftWall);
+leftWall.rotation.y = Math.PI / 2; leftWall.position.x = -ROOM.width / 2; leftWall.position.y = ROOM.height / 2; scene.add(leftWall);
 
 const rightWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
-rightWall.rotation.y = -Math.PI / 2;
-rightWall.position.x = ROOM.width / 2;
-rightWall.position.y = ROOM.height / 2;
-scene.add(rightWall);
+rightWall.rotation.y = -Math.PI / 2; rightWall.position.x = ROOM.width / 2; rightWall.position.y = ROOM.height / 2; scene.add(rightWall);
 
 // --- Loader ---
 const loader = new THREE.TextureLoader();
@@ -290,7 +284,7 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const popup = document.createElement('div');
 popup.id = 'desc-popup';
-Object.assign(popup.style, { position: 'fixed', pointerEvents: 'none', background: 'rgba(0,0,0,0.78)', color: '#fff', padding: '8px 10px', borderRadius: '6px', fontFamily: 'system-ui, Arial, sans-serif', fontSize: '13px', maxWidth: '320px', display: 'none', zIndex: '1000', boxShadow: '0 6px 18px rgba(0,0,0,0.35)' });
+Object.assign(popup.style, { position: 'fixed', pointerEvents: 'none', background: 'rgba(0,0,0,0.78)', color: '#fff', padding: '8px 10px', borderRadius: '6px', fontFamily: 'system-ui, Arial, sans[...]
 document.body.appendChild(popup);
 function showPopup(text, clientX, clientY) { popup.innerText = text || ''; const left = Math.min(window.innerWidth - 340, clientX + 14); const top = Math.min(window.innerHeight - 80, clientY + 14); popup.style.left = left + 'px'; popup.style.top = top + 'px'; popup.style.display = 'block'; }
 function hidePopup() { popup.style.display = 'none'; }
@@ -341,28 +335,25 @@ function onPointerDown(event) {
 }
 window.addEventListener('pointerdown', onPointerDown);
 
-// --- RIGHT wall: keep a decorative WebGL frame (no slide) ---
+// --- RIGHT wall: create a decorative WebGL frame using createFrame() ---
 const RIGHT_FRAME_W = 3.2;
 const RIGHT_FRAME_H = 2.0;
 const frameDepth = 0.06;
 
-// backing panel
-const rightBackingMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 });
-const rightBackingGeo = new THREE.PlaneGeometry(RIGHT_FRAME_W, RIGHT_FRAME_H);
-const rightBacking = new THREE.Mesh(rightBackingGeo, rightBackingMat);
-rightBacking.position.set(ROOM.width / 2 - (frameDepth / 2 + 0.02), ROOM.height / 2, 0);
-rightBacking.rotation.y = -Math.PI / 2;
-rightBacking.receiveShadow = true;
-scene.add(rightBacking);
-
-// rim around the backing
-const rimGeo = new THREE.BoxGeometry(RIGHT_FRAME_W + 0.04, RIGHT_FRAME_H + 0.04, 0.02);
-const rimMat = new THREE.MeshStandardMaterial({ color: 0x2c1f17, roughness: 0.7 });
-const rimMesh = new THREE.Mesh(rimGeo, rimMat);
-rimMesh.position.set(ROOM.width / 2 - (frameDepth / 2 + 0.02), ROOM.height / 2, -0.01);
-rimMesh.rotation.y = -Math.PI / 2;
-rimMesh.castShadow = true;
-scene.add(rimMesh);
+// Use createFrame to make the right-wall frame. Position it flush with the right interior wall
+// (small inward offset to avoid z-fighting).
+createFrame({
+  x: ROOM.width / 2 - (frameDepth / 2 + 0.02), // match previous backing offset
+  y: ROOM.height / 2,
+  z: 0,
+  openingWidth: RIGHT_FRAME_W,
+  openingHeight: RIGHT_FRAME_H,
+  frameDepth: frameDepth,
+  frameBorderThickness: 0.04,
+  matInset: 0.04,
+  rotationY: -Math.PI / 2,
+  title: 'Right Wall Frame'
+});
 
 // --- Modal & center frame video functions (unchanged) ---
 const modal = document.getElementById('video-modal');
@@ -404,4 +395,4 @@ function animate() {
 animate();
 
 // --- Helpful logs ---
-console.log('Removed Google Slide iframe; kept a WebGL frame on the right wall.');
+console.log('Created right-wall frame using createFrame() (base: commit 2d1c151).');
