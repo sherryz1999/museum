@@ -214,7 +214,7 @@ createFrame({
   frameDepth: 0.06,
   frameBorderThickness: 0.06,
   matInset: 0.06,
-  rotationY: 0,
+  rotationY: Math.PI,
   imageUrl: 'https://sherryz1999.github.io/museum/IMG_3401.JPG',
   title: 'Back Left - Landscape'
 });
@@ -229,7 +229,7 @@ createFrame({
   frameDepth: 0.06,
   frameBorderThickness: 0.06,
   matInset: 0.06,
-  rotationY: 0,
+  rotationY: Math.PI,
   imageUrl: 'https://sherryz1999.github.io/museum/IMG_34012.JPG',
   title: 'Back Right - Landscape'
 });
