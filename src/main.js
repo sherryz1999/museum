@@ -1,7 +1,11 @@
 // src/main.js
 // Museum scene — Emerald exterior theme, portraits, door.
-// Base: commit 2d1c151. PDF preview now rendered into a WebGL texture (via PDF.js -> canvas -> CanvasTexture)
-// and applied to the WebGL frame on the right wall so the preview always fits the frame.
+// Base: commit 2d1c151. PDF preview rendered into a WebGL texture and applied to right-wall frame.
+// Change: added two landscape pictures on the back wall (left and right of center).
+//
+// Pictures added:
+// 1) https://sherryz1999.github.io/museum/IMG_3401.JPG  (left side of back wall)
+// 2) https://sherryz1999.github.io/museum/IMG_34012.JPG (right side of back wall)
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -199,6 +203,37 @@ createFrame({ x: 0, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openin
 createFrame({ x: 4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, title: 'Art 2', rotationY: 0 });
 createFrame({ x: -4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, title: 'Art 1', rotationY: 0 });
 
+// --- NEW: two landscape pictures on the back wall (left and right of center) ---
+// Left landscape image (to the left side of the back wall)
+createFrame({
+  x: -3.8, // left of center on back wall
+  y: 1.6,
+  z: -ROOM.depth / 2 + 0.06,
+  openingWidth: 2.4,    // landscape orientation
+  openingHeight: 1.4,
+  frameDepth: 0.06,
+  frameBorderThickness: 0.06,
+  matInset: 0.06,
+  rotationY: 0,
+  imageUrl: 'https://sherryz1999.github.io/museum/IMG_3401.JPG',
+  title: 'Back Left - Landscape'
+});
+
+// Right landscape image (to the right side of the back wall)
+createFrame({
+  x: 3.8, // right of center on back wall
+  y: 1.6,
+  z: -ROOM.depth / 2 + 0.06,
+  openingWidth: 2.4,
+  openingHeight: 1.4,
+  frameDepth: 0.06,
+  frameBorderThickness: 0.06,
+  matInset: 0.06,
+  rotationY: 0,
+  imageUrl: 'https://sherryz1999.github.io/museum/IMG_34012.JPG',
+  title: 'Back Right - Landscape'
+});
+
 // --- Portraits on left wall ---
 const portraitCount = PORTRAIT_FILES.length;
 if (portraitCount > 0) {
@@ -282,7 +317,7 @@ imgModalCloseBtn.addEventListener('click', closeImageModal);
 imgModal.addEventListener('click', (e) => { if (e.target === imgModal) closeImageModal(); });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeImageModal(); });
 
-// --- Raycasting, popup and interactions (unchanged) ---
+// --- Raycasting, popup and interactions (unchanged but pointerdown updated earlier) ---
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const popup = document.createElement('div');
@@ -328,6 +363,14 @@ function onPointerDown(event) {
     }
     if (obj.userData && obj.userData.type === 'video-frame' && obj.userData.videoId) {
       openVideoModal(obj.userData.videoId);
+      return;
+    }
+    if (obj.userData && obj.userData.type === 'pdf-preview' && obj.userData.pdfUrl) {
+      window.open(obj.userData.pdfUrl, '_blank', 'noopener');
+      return;
+    }
+    if (obj.userData && obj.userData.type === 'pdf-preview' && obj.userData.pdfUrl) {
+      window.open(obj.userData.pdfUrl, '_blank', 'noopener');
       return;
     }
     if (obj.userData && obj.userData.type === 'door') {
@@ -426,8 +469,6 @@ async function applyPdfToMesh(pdfUrl, mesh, targetWorldWidth, targetWorldHeight,
     // store reference so clicking can open full PDF
     mesh.userData.pdfUrl = pdfUrl;
 
-    // optional: make the mesh slightly inset so glass overlay still visible
-    // (glass mesh was added in createFrame as separate mesh; nothing to do here)
   } catch (err) {
     console.error('Failed rendering PDF to mesh:', err);
   }
@@ -435,48 +476,10 @@ async function applyPdfToMesh(pdfUrl, mesh, targetWorldWidth, targetWorldHeight,
 
 // Apply PDF texture to right frame thumb (use the thumb mesh returned earlier)
 if (rightFrameThumb) {
-  // rightFrameThumb geometry is in world units; compute its size from geometry parameters
-  // The createFrame uses a PlaneGeometry for thumb: width = (openingWidth - matInset*2) - 0.02
-  // We'll approximate using RIGHT_FRAME_W/RIGHT_FRAME_H as the opening size.
-  // pixelsPerUnit controls how many CSS pixels represent one world unit — tweak if preview looks too large/small.
-  const PIXELS_PER_UNIT = 150; // increase -> higher resolution texture; decrease -> smaller texture (and lower memory)
+  const PIXELS_PER_UNIT = 150;
   applyPdfToMesh(PDF_URL, rightFrameThumb, RIGHT_FRAME_W - 0.04, RIGHT_FRAME_H - 0.04, PIXELS_PER_UNIT);
-
-  // Make the thumb mesh clickable to open the full PDF in a new tab
-  // (raycast already looks for objects with userData.type === 'portrait' - we will handle video-frame differently in pointerdown)
   rightFrameThumb.userData.type = 'pdf-preview';
 }
-
-// Update pointerdown handler to handle pdf-preview click (open full PDF)
-function onPointerDownUpdated(event) {
-  const rect = renderer.domElement.getBoundingClientRect();
-  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-  raycaster.setFromCamera(pointer, camera);
-  const intersects = raycaster.intersectObjects(scene.children, true);
-  for (const it of intersects) {
-    const obj = it.object;
-    if (obj.userData && obj.userData.type === 'portrait') {
-      const src = obj.userData.imageUrl || (obj.userData._group && obj.userData._group.userData && obj.userData._group.userData.imageUrl) || '';
-      openImageModal(src, obj.userData.filename || '');
-      return;
-    }
-    if (obj.userData && obj.userData.type === 'video-frame' && obj.userData.videoId) {
-      openVideoModal(obj.userData.videoId);
-      return;
-    }
-    if (obj.userData && obj.userData.type === 'pdf-preview' && obj.userData.pdfUrl) {
-      window.open(obj.userData.pdfUrl, '_blank', 'noopener');
-      return;
-    }
-    if (obj.userData && obj.userData.type === 'door') {
-      toggleDoor();
-      return;
-    }
-  }
-}
-window.removeEventListener('pointerdown', onPointerDown);
-window.addEventListener('pointerdown', onPointerDownUpdated);
 
 // --- Modal & center frame video functions (unchanged) ---
 const modal = document.getElementById('video-modal');
@@ -518,4 +521,4 @@ function animate() {
 animate();
 
 // --- Helpful logs ---
-console.log('Applied PDF as WebGL texture to right-wall frame (first page). Click the frame to open full PDF.');
+console.log('Added two landscape pictures on the back wall and applied PDF texture to right-wall frame.');
