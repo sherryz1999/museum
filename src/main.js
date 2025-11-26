@@ -358,7 +358,7 @@ const frameDepth = 0.06;
 const rightBackingMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 });
 const rightBackingGeo = new THREE.PlaneGeometry(RIGHT_FRAME_W, RIGHT_FRAME_H);
 const rightBacking = new THREE.Mesh(rightBackingGeo, rightBackingMat);
-rightBacking.position.set(ROOM.width / 2 - (frameDepth / 2 + 0.02), ROOM.height / 2, 0);
+rightBacking.position.set(ROOM.width / 2 - (frameDepth / 2 + 0.02), ROOM.height / 2, 4);
 rightBacking.rotation.y = -Math.PI / 2;
 rightBacking.receiveShadow = true;
 scene.add(rightBacking);
