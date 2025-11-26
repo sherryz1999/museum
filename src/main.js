@@ -1,11 +1,9 @@
 // src/main.js
 // Museum scene — Emerald exterior theme, portraits, door.
-// Change: embed the provided Google Slides iframe into the WebGL frame on the right wall
-// using CSS3DRenderer so the iframe appears exactly in front of the right-wall frame.
+// Change: removed the Google Slides CSS3D iframe; kept a WebGL frame on the right wall instead.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
-import { CSS3DRenderer, CSS3DObject } from 'https://unpkg.com/three@0.159.0/examples/jsm/renderers/CSS3DRenderer.js';
 
 const canvasContainer = document.body;
 
@@ -23,24 +21,12 @@ const ROOM = { width: 20, height: 4, depth: 12 };
 // Gap from wall
 const GAP_WORLD_UNITS = 1;
 
-// --- Renderer (WebGL) ---
+// --- Renderer ---
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
-
-// --- CSS3D renderer (for the iframe) ---
-const cssRenderer = new CSS3DRenderer();
-cssRenderer.domElement.style.position = 'absolute';
-cssRenderer.domElement.style.top = '0';
-cssRenderer.domElement.style.left = '0';
-cssRenderer.domElement.style.zIndex = '6';
-// let CSS3D renderer ignore pointer events on its root; individual element will accept events
-cssRenderer.domElement.style.pointerEvents = 'none';
-document.body.appendChild(cssRenderer.domElement);
-// separate scene for CSS3D objects
-const cssScene = new THREE.Scene();
 
 // --- Scene & Camera ---
 const scene = new THREE.Scene();
@@ -98,10 +84,16 @@ backWall.position.z = -ROOM.depth / 2; backWall.position.y = ROOM.height / 2; sc
 
 // Left and right interior walls — keep interior neutral (light)
 const leftWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
-leftWall.rotation.y = Math.PI / 2; leftWall.position.x = -ROOM.width / 2; leftWall.position.y = ROOM.height / 2; scene.add(leftWall);
+leftWall.rotation.y = Math.PI / 2;
+leftWall.position.x = -ROOM.width / 2;
+leftWall.position.y = ROOM.height / 2;
+scene.add(leftWall);
 
 const rightWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
-rightWall.rotation.y = -Math.PI / 2; rightWall.position.x = ROOM.width / 2; rightWall.position.y = ROOM.height / 2; scene.add(rightWall);
+rightWall.rotation.y = -Math.PI / 2;
+rightWall.position.x = ROOM.width / 2;
+rightWall.position.y = ROOM.height / 2;
+scene.add(rightWall);
 
 // --- Loader ---
 const loader = new THREE.TextureLoader();
@@ -358,7 +350,7 @@ const frameDepth = 0.06;
 const rightBackingMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 });
 const rightBackingGeo = new THREE.PlaneGeometry(RIGHT_FRAME_W, RIGHT_FRAME_H);
 const rightBacking = new THREE.Mesh(rightBackingGeo, rightBackingMat);
-rightBacking.position.set(ROOM.width / 2 - (frameDepth / 2 + 0.02), ROOM.height / 2, 4);
+rightBacking.position.set(ROOM.width / 2 - (frameDepth / 2 + 0.02), ROOM.height / 2, 0);
 rightBacking.rotation.y = -Math.PI / 2;
 rightBacking.receiveShadow = true;
 scene.add(rightBacking);
@@ -372,58 +364,6 @@ rimMesh.rotation.y = -Math.PI / 2;
 rimMesh.castShadow = true;
 scene.add(rimMesh);
 
-// --- Embed Google Slides iframe in front of the RIGHT wall frame using CSS3D ---
-// Use the exact iframe markup/URL and requested pixel size 94x100
-const SLIDE_IFRAME_SRC = 'https://docs.google.com/presentation/d/e/2PACX-1vT0SUWPd9MwElcdH1FiH5AcQ8_oiqvHqg4xa_tnSB9lVh34-TzYnae4Ji5jPj_XLQ/pubembed?start=true&loop=false&delayms=3000';
-const IFRAME_PX_W = 94;
-const IFRAME_PX_H = 100;
-
-const slideContainer = document.createElement('div');
-slideContainer.style.width = IFRAME_PX_W + 'px';
-slideContainer.style.height = IFRAME_PX_H + 'px';
-slideContainer.style.overflow = 'hidden';
-slideContainer.style.border = '0';
-slideContainer.style.boxSizing = 'border-box';
-slideContainer.style.pointerEvents = 'auto'; // enable mouse interaction within iframe
-slideContainer.style.background = '#fff';
-slideContainer.style.borderRadius = '3px';
-slideContainer.style.boxShadow = '0 4px 10px rgba(0,0,0,0.18)';
-
-// iframe itself
-const slideIframe = document.createElement('iframe');
-slideIframe.src = SLIDE_IFRAME_SRC;
-slideIframe.frameBorder = '0';
-slideIframe.width = String(IFRAME_PX_W);
-slideIframe.height = String(IFRAME_PX_H);
-slideIframe.allowFullscreen = true;
-slideIframe.setAttribute('mozallowfullscreen', 'true');
-slideIframe.setAttribute('webkitallowfullscreen', 'true');
-slideIframe.style.display = 'block';
-slideIframe.style.width = '100%';
-slideIframe.style.height = '100%';
-slideIframe.style.border = '0';
-slideContainer.appendChild(slideIframe);
-
-// create CSS3D object and align with the WebGL frame (rightBacking)
-const slideCssObj = new CSS3DObject(slideContainer);
-// copy position and rotation from rightBacking so it sits flush
-slideCssObj.position.copy(rightBacking.position);
-slideCssObj.rotation.copy(rightBacking.rotation);
-// nudge slightly forward so it is visible above the backing
-slideCssObj.position.x += 0.01;
-console.log(slideCssObj.position.x);
-cssScene.add(slideCssObj);
-
-// Allow pointer events for the iframe area: enable on its DOM container
-slideContainer.addEventListener('pointerenter', () => {
-  // enable pointer-events on the cssRenderer root so iframe receives events
-  cssRenderer.domElement.style.pointerEvents = 'auto';
-});
-slideContainer.addEventListener('pointerleave', () => {
-  // restore so the WebGL canvas receives events normally when not over iframe
-  cssRenderer.domElement.style.pointerEvents = 'none';
-});
-
 // --- Modal & center frame video functions (unchanged) ---
 const modal = document.getElementById('video-modal');
 const ytIframe = document.getElementById('yt-iframe');
@@ -434,13 +374,7 @@ if (closeBtn) closeBtn.addEventListener('click', closeVideoModal);
 if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeVideoModal(); });
 
 // --- Resize / render ---
-function onResize() {
-  const w = window.innerWidth; const h = window.innerHeight;
-  renderer.setSize(w, h);
-  cssRenderer.setSize(w, h);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-}
+function onResize() { const w = window.innerWidth; const h = window.innerHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 window.addEventListener('resize', onResize);
 onResize();
 
@@ -466,9 +400,8 @@ function animate() {
   });
 
   renderer.render(scene, camera);
-  cssRenderer.render(cssScene, camera);
 }
 animate();
 
 // --- Helpful logs ---
-console.log('Embedded Google Slides iframe into the WebGL right-wall frame (94x100 px).');
+console.log('Removed Google Slide iframe; kept a WebGL frame on the right wall.');
