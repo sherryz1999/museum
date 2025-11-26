@@ -1,11 +1,10 @@
 // src/main.js
 // Museum scene — Emerald exterior theme, portraits, door.
-// Base: commit 2d1c151. PDF.js preview aligned to the WebGL frame on the right wall.
-// PDF preview size is computed from the frame world size so it visually fits the WebGL frame.
+// Base: commit 2d1c151. PDF preview now rendered into a WebGL texture (via PDF.js -> canvas -> CanvasTexture)
+// and applied to the WebGL frame on the right wall so the preview always fits the frame.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
-import { CSS3DRenderer, CSS3DObject } from 'https://unpkg.com/three@0.159.0/examples/jsm/renderers/CSS3DRenderer.js';
 
 const canvasContainer = document.body;
 
@@ -32,16 +31,6 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
-
-// --- CSS3D renderer (for embedding DOM elements like the PDF preview) ---
-const cssRenderer = new CSS3DRenderer();
-cssRenderer.domElement.style.position = 'absolute';
-cssRenderer.domElement.style.top = '0';
-cssRenderer.domElement.style.left = '0';
-cssRenderer.domElement.style.zIndex = '6';
-cssRenderer.domElement.style.pointerEvents = 'none'; // enable when hovering the preview
-document.body.appendChild(cssRenderer.domElement);
-const cssScene = new THREE.Scene();
 
 // --- Scene & Camera ---
 const scene = new THREE.Scene();
@@ -83,20 +72,20 @@ const EMERALD_PRIMARY = 0x0f6b58;
 const EMERALD_ACCENT = 0x7fcfb1;
 const OUTSIDE_TRIM = 0x734b2b;
 
-// --- Room planes ---
+// --- Room planes helper ---
 function makePlane(w, h, color) {
   const mat = new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide });
   const geo = new THREE.PlaneGeometry(w, h);
   return new THREE.Mesh(geo, mat);
 }
 
+// floor / ceiling / walls
 const floor = makePlane(ROOM.width, ROOM.depth, 0xede6dd);
 floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
 const ceiling = makePlane(ROOM.width, ROOM.depth, 0xf0f0f0); ceiling.rotation.x = Math.PI / 2; ceiling.position.y = ROOM.height; scene.add(ceiling);
 const backWall = makePlane(ROOM.width, ROOM.height, EMERALD_PRIMARY);
 backWall.position.z = -ROOM.depth / 2; backWall.position.y = ROOM.height / 2; scene.add(backWall);
 
-// interior walls
 const leftWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
 leftWall.rotation.y = Math.PI / 2; leftWall.position.x = -ROOM.width / 2; leftWall.position.y = ROOM.height / 2; scene.add(leftWall);
 
@@ -110,7 +99,7 @@ if (typeof loader.setCrossOrigin === 'function') {
 }
 loader.crossOrigin = 'anonymous';
 
-// --- Frame creation (same as commit) ---
+// --- Frame creation (same as before) ---
 function createFrame({
   x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01,
   openingWidth = 3.2, openingHeight = 1.8,
@@ -349,8 +338,8 @@ function onPointerDown(event) {
 }
 window.addEventListener('pointerdown', onPointerDown);
 
-// --- RIGHT wall: create a decorative WebGL frame using createFrame() and embed a PDF.js preview ---
-// Capture the returned thumb mesh so we can align the CSS3D object to its group
+// --- RIGHT wall: create a decorative WebGL frame using createFrame() and render PDF into texture ---
+// Capture the returned thumb mesh so we can align/apply the texture
 const RIGHT_FRAME_W = 3.2;
 const RIGHT_FRAME_H = 2.0;
 const RIGHT_FRAME_DEPTH = 0.06;
@@ -368,15 +357,7 @@ const rightFrameThumb = createFrame({
   title: 'Right Wall Frame'
 });
 
-const rightFrameGroup = rightFrameThumb && rightFrameThumb.userData && rightFrameThumb.userData._group ? rightFrameThumb.userData._group : null;
-
-// Determine preview pixel size from frame world size so preview visually fits the frame.
-// You can tweak PIXELS_PER_UNIT to make the preview larger or smaller.
-const PIXELS_PER_UNIT = 1000; // 100 pixels per world unit
-const IFRAME_PX_W = Math.max(48, Math.round(RIGHT_FRAME_W * PIXELS_PER_UNIT)); // minimum to avoid too-small
-const IFRAME_PX_H = Math.max(48, Math.round(RIGHT_FRAME_H * PIXELS_PER_UNIT));
-
-// Helper: dynamically load PDF.js from CDN (pdfjs-dist)
+// helper to load pdf.js (same CDN)
 function loadPdfJs(version = '3.9.179') {
   return new Promise((resolve, reject) => {
     if (window.pdfjsLib) return resolve(window.pdfjsLib);
@@ -395,116 +376,107 @@ function loadPdfJs(version = '3.9.179') {
   });
 }
 
-// Create preview and render first page using PDF.js
-async function createPdfPreview(pdfUrl, widthPx, heightPx) {
-  // container element for CSS3D
-  const container = document.createElement('div');
-  container.style.width = widthPx + 'px';
-  container.style.height = heightPx + 'px';
-  container.style.boxSizing = 'border-box';
-  container.style.pointerEvents = 'auto';
-  container.style.background = '#fff';
-  container.style.borderRadius = '3px';
-  container.style.overflow = 'hidden';
-  container.style.display = 'flex';
-  container.style.alignItems = 'center';
-  container.style.justifyContent = 'center';
-  container.style.padding = '2px';
-  container.style.position = 'relative';
-
-  // canvas for PDF rendering
-  const canvas = document.createElement('canvas');
-  canvas.style.width = '100%';
-  canvas.style.height = '100%';
-  canvas.style.display = 'block';
-  canvas.style.background = '#fff';
-  container.appendChild(canvas);
-
-  // simple loading indicator
-  const loading = document.createElement('div');
-  loading.innerText = 'Loading...';
-  loading.style.position = 'absolute';
-  loading.style.fontSize = '12px';
-  loading.style.color = '#444';
-  loading.style.pointerEvents = 'none';
-  container.appendChild(loading);
-
-  // click to open full PDF
-  container.addEventListener('click', (e) => {
-    window.open(pdfUrl, '_blank', 'noopener');
-  });
+// Render the first page of the PDF to an offscreen canvas and apply to the thumb mesh as a texture.
+async function applyPdfToMesh(pdfUrl, mesh, targetWorldWidth, targetWorldHeight, pixelsPerUnit = 150) {
+  if (!mesh) return;
+  let pdfjs;
+  try {
+    pdfjs = await loadPdfJs();
+  } catch (err) {
+    console.error('Failed to load PDF.js', err);
+    return;
+  }
 
   try {
-    const pdfjs = await loadPdfJs();
     const loadingTask = pdfjs.getDocument({ url: pdfUrl, withCredentials: false });
     const pdf = await loadingTask.promise;
     const page = await pdf.getPage(1);
     const viewport = page.getViewport({ scale: 1 });
 
-    // compute scale to fit canvas element size (taking devicePixelRatio into account)
+    // compute target pixel size based on world size and pixelsPerUnit
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const targetW = widthPx * dpr;
-    const targetH = heightPx * dpr;
-    const scale = Math.min(targetW / viewport.width, targetH / viewport.height);
+    const targetPxW = Math.max(32, Math.round(targetWorldWidth * pixelsPerUnit));
+    const targetPxH = Math.max(32, Math.round(targetWorldHeight * pixelsPerUnit));
+
+    // choose scale so page fits inside targetPxW x targetPxH
+    const scale = Math.min(targetPxW / viewport.width, targetPxH / viewport.height);
     const scaledViewport = page.getViewport({ scale });
 
-    // set canvas size in device pixels, style in CSS pixels
+    // create offscreen canvas in device pixels
+    const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { alpha: false });
     canvas.width = Math.round(scaledViewport.width);
     canvas.height = Math.round(scaledViewport.height);
-    // keep canvas style sized by CSS pixels (account for dpr)
-    canvas.style.width = Math.round(scaledViewport.width / dpr) + 'px';
-    canvas.style.height = Math.round(scaledViewport.height / dpr) + 'px';
+    // style size (not required, used only if inspected)
+    canvas.style.width = Math.round(canvas.width / dpr) + 'px';
+    canvas.style.height = Math.round(canvas.height / dpr) + 'px';
 
-    const renderContext = {
-      canvasContext: ctx,
-      viewport: scaledViewport
-    };
-    await page.render(renderContext).promise;
+    await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
 
-    // remove loading
-    if (loading.parentNode) loading.parentNode.removeChild(loading);
+    // create three.js texture from canvas
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    tex.encoding = THREE.sRGBEncoding;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+
+    // set material on mesh (preserve existing glass overlay)
+    mesh.material = new THREE.MeshBasicMaterial({ map: tex });
+
+    // store reference so clicking can open full PDF
+    mesh.userData.pdfUrl = pdfUrl;
+
+    // optional: make the mesh slightly inset so glass overlay still visible
+    // (glass mesh was added in createFrame as separate mesh; nothing to do here)
   } catch (err) {
-    // show fallback link text
-    container.innerHTML = '';
-    const a = document.createElement('a');
-    a.href = pdfUrl;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.innerText = 'Open PDF';
-    a.style.display = 'inline-block';
-    a.style.padding = '8px 10px';
-    a.style.background = '#eee';
-    a.style.borderRadius = '4px';
-    a.style.color = '#111';
-    container.appendChild(a);
-    console.error('PDF preview failed:', err);
+    console.error('Failed rendering PDF to mesh:', err);
   }
-
-  return container;
 }
 
-// Create and attach CSS3D preview aligned to frame
-(async () => {
-  if (!rightFrameGroup) return;
+// Apply PDF texture to right frame thumb (use the thumb mesh returned earlier)
+if (rightFrameThumb) {
+  // rightFrameThumb geometry is in world units; compute its size from geometry parameters
+  // The createFrame uses a PlaneGeometry for thumb: width = (openingWidth - matInset*2) - 0.02
+  // We'll approximate using RIGHT_FRAME_W/RIGHT_FRAME_H as the opening size.
+  // pixelsPerUnit controls how many CSS pixels represent one world unit — tweak if preview looks too large/small.
+  const PIXELS_PER_UNIT = 150; // increase -> higher resolution texture; decrease -> smaller texture (and lower memory)
+  applyPdfToMesh(PDF_URL, rightFrameThumb, RIGHT_FRAME_W - 0.04, RIGHT_FRAME_H - 0.04, PIXELS_PER_UNIT);
 
-  const previewEl = await createPdfPreview(PDF_URL, IFRAME_PX_W, IFRAME_PX_H);
-  const cssObj = new CSS3DObject(previewEl);
+  // Make the thumb mesh clickable to open the full PDF in a new tab
+  // (raycast already looks for objects with userData.type === 'portrait' - we will handle video-frame differently in pointerdown)
+  rightFrameThumb.userData.type = 'pdf-preview';
+}
 
-  // align with WebGL frame group
-  cssObj.position.copy(rightFrameGroup.position);
-  cssObj.rotation.copy(rightFrameGroup.rotation);
-
-  // nudge outward along frame normal so it sits in front of the frame
-  const normal = new THREE.Vector3(1, 0, 0).applyQuaternion(rightFrameGroup.quaternion);
-  cssObj.position.add(normal.multiplyScalar(0.02));
-
-  cssScene.add(cssObj);
-
-  // pointer control while hovering preview
-  previewEl.addEventListener('pointerenter', () => { cssRenderer.domElement.style.pointerEvents = 'auto'; });
-  previewEl.addEventListener('pointerleave', () => { cssRenderer.domElement.style.pointerEvents = 'none'; });
-})();
+// Update pointerdown handler to handle pdf-preview click (open full PDF)
+function onPointerDownUpdated(event) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const intersects = raycaster.intersectObjects(scene.children, true);
+  for (const it of intersects) {
+    const obj = it.object;
+    if (obj.userData && obj.userData.type === 'portrait') {
+      const src = obj.userData.imageUrl || (obj.userData._group && obj.userData._group.userData && obj.userData._group.userData.imageUrl) || '';
+      openImageModal(src, obj.userData.filename || '');
+      return;
+    }
+    if (obj.userData && obj.userData.type === 'video-frame' && obj.userData.videoId) {
+      openVideoModal(obj.userData.videoId);
+      return;
+    }
+    if (obj.userData && obj.userData.type === 'pdf-preview' && obj.userData.pdfUrl) {
+      window.open(obj.userData.pdfUrl, '_blank', 'noopener');
+      return;
+    }
+    if (obj.userData && obj.userData.type === 'door') {
+      toggleDoor();
+      return;
+    }
+  }
+}
+window.removeEventListener('pointerdown', onPointerDown);
+window.addEventListener('pointerdown', onPointerDownUpdated);
 
 // --- Modal & center frame video functions (unchanged) ---
 const modal = document.getElementById('video-modal');
@@ -516,17 +488,10 @@ if (closeBtn) closeBtn.addEventListener('click', closeVideoModal);
 if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeVideoModal(); });
 
 // --- Resize / render ---
-function onResize() {
-  const w = window.innerWidth; const h = window.innerHeight;
-  renderer.setSize(w, h);
-  cssRenderer.setSize(w, h);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-}
+function onResize() { const w = window.innerWidth; const h = window.innerHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 window.addEventListener('resize', onResize);
 onResize();
 
-// --- Animation loop ---
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
@@ -543,15 +508,14 @@ function animate() {
   // gentle float
   const t = performance.now() * 0.0002;
   scene.traverse((o) => {
-    if (o.userData && (o.userData.type === 'video-frame' || o.userData.type === 'portrait')) {
+    if (o.userData && (o.userData.type === 'video-frame' || o.userData.type === 'portrait' || o.userData.type === 'pdf-preview')) {
       o.rotation.z = Math.sin(t + (o.position.x || 0)) * 0.002;
     }
   });
 
   renderer.render(scene, camera);
-  cssRenderer.render(cssScene, camera);
 }
 animate();
 
 // --- Helpful logs ---
-console.log('PDF.js preview set up for', PDF_URL, ' — click the preview to open the full PDF.');
+console.log('Applied PDF as WebGL texture to right-wall frame (first page). Click the frame to open full PDF.');
