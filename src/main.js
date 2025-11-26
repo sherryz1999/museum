@@ -1,9 +1,7 @@
 // src/main.js
 // Museum scene — Emerald exterior theme, portraits, door.
-// Base: commit 2d1c151. Replaced external viewers with an embedded PDF.js rendering
-// for the PDF at https://sherryz1999.github.io/museum/CatFoodDrive.pdf
-// The PDF page is rendered into a small DOM canvas (94x100 px) and placed as a CSS3DObject
-// aligned to the WebGL frame on the right wall. Clicking the small preview opens the full PDF.
+// Base: commit 2d1c151. PDF.js preview aligned to the WebGL frame on the right wall.
+// PDF preview size is computed from the frame world size so it visually fits the WebGL frame.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -372,9 +370,11 @@ const rightFrameThumb = createFrame({
 
 const rightFrameGroup = rightFrameThumb && rightFrameThumb.userData && rightFrameThumb.userData._group ? rightFrameThumb.userData._group : null;
 
-// PDF preview pixel size
-const IFRAME_PX_W = 94;
-const IFRAME_PX_H = 100;
+// Determine preview pixel size from frame world size so preview visually fits the frame.
+// You can tweak PIXELS_PER_UNIT to make the preview larger or smaller.
+const PIXELS_PER_UNIT = 100; // 100 pixels per world unit
+const IFRAME_PX_W = Math.max(48, Math.round(RIGHT_FRAME_W * PIXELS_PER_UNIT)); // minimum to avoid too-small
+const IFRAME_PX_H = Math.max(48, Math.round(RIGHT_FRAME_H * PIXELS_PER_UNIT));
 
 // Helper: dynamically load PDF.js from CDN (pdfjs-dist)
 function loadPdfJs(version = '3.9.179') {
@@ -383,7 +383,6 @@ function loadPdfJs(version = '3.9.179') {
     const script = document.createElement('script');
     script.src = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/build/pdf.min.js`;
     script.onload = () => {
-      // set worker
       if (window.pdfjsLib) {
         window.pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/build/pdf.worker.min.js`;
         resolve(window.pdfjsLib);
@@ -411,6 +410,7 @@ async function createPdfPreview(pdfUrl, widthPx, heightPx) {
   container.style.alignItems = 'center';
   container.style.justifyContent = 'center';
   container.style.padding = '2px';
+  container.style.position = 'relative';
 
   // canvas for PDF rendering
   const canvas = document.createElement('canvas');
@@ -452,6 +452,7 @@ async function createPdfPreview(pdfUrl, widthPx, heightPx) {
     const ctx = canvas.getContext('2d', { alpha: false });
     canvas.width = Math.round(scaledViewport.width);
     canvas.height = Math.round(scaledViewport.height);
+    // keep canvas style sized by CSS pixels (account for dpr)
     canvas.style.width = Math.round(scaledViewport.width / dpr) + 'px';
     canvas.style.height = Math.round(scaledViewport.height / dpr) + 'px';
 
