@@ -470,4 +470,7 @@ function animate() {
 animate();
 
 // --- Helpful logs ---
+console.log(slideCssObj.position.x);
+console.log(slideCssObj.position.y);
+console.log(slideCssObj.position.z);
 console.log('Embedded Google Slides iframe into the WebGL right-wall frame (94x100 px).');
