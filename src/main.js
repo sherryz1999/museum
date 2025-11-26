@@ -1,11 +1,9 @@
 // src/main.js
 // Museum scene — Emerald exterior theme, portraits, door.
-// Base: commit 2d1c151. Replaced the Google Slides CSS3D iframe with Adobe's PDF viewer
-// embedded (CSS3D) and aligned to the WebGL frame on the right wall. Shows:
-// https://sherryz1999.github.io/museum/CatFoodDrive.pdf
-//
-// Note: Adobe's public viewer URL uses the Document Cloud viewer page. If the viewer
-// is blocked you can fall back to opening the PDF in a new tab (link provided).
+// Base: commit 2d1c151. Replaced external viewers with an embedded PDF.js rendering
+// for the PDF at https://sherryz1999.github.io/museum/CatFoodDrive.pdf
+// The PDF page is rendered into a small DOM canvas (94x100 px) and placed as a CSS3DObject
+// aligned to the WebGL frame on the right wall. Clicking the small preview opens the full PDF.
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -22,6 +20,9 @@ const PORTRAIT_DESCRIPTIONS = {
   'IMG_3403.JPG': 'Portrait 3 — replace this text with your description.'
 };
 
+// PDF to display (preview + click to open full)
+const PDF_URL = 'https://sherryz1999.github.io/museum/CatFoodDrive.pdf';
+
 // Room size
 const ROOM = { width: 20, height: 4, depth: 12 };
 // Gap from wall
@@ -34,14 +35,13 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-// --- CSS3D renderer (for embedding DOM elements like iframes) ---
+// --- CSS3D renderer (for embedding DOM elements like the PDF preview) ---
 const cssRenderer = new CSS3DRenderer();
 cssRenderer.domElement.style.position = 'absolute';
 cssRenderer.domElement.style.top = '0';
 cssRenderer.domElement.style.left = '0';
 cssRenderer.domElement.style.zIndex = '6';
-// keep root ignoring pointer events by default; we'll enable when hovering the iframe
-cssRenderer.domElement.style.pointerEvents = 'none';
+cssRenderer.domElement.style.pointerEvents = 'none'; // enable when hovering the preview
 document.body.appendChild(cssRenderer.domElement);
 const cssScene = new THREE.Scene();
 
@@ -81,7 +81,7 @@ fill.castShadow = false;
 scene.add(fill);
 
 // --- Palette ---
-const EMERALD_PRIMARY = 0x0f6b58; // deep emerald
+const EMERALD_PRIMARY = 0x0f6b58;
 const EMERALD_ACCENT = 0x7fcfb1;
 const OUTSIDE_TRIM = 0x734b2b;
 
@@ -98,7 +98,7 @@ const ceiling = makePlane(ROOM.width, ROOM.depth, 0xf0f0f0); ceiling.rotation.x 
 const backWall = makePlane(ROOM.width, ROOM.height, EMERALD_PRIMARY);
 backWall.position.z = -ROOM.depth / 2; backWall.position.y = ROOM.height / 2; scene.add(backWall);
 
-// Left and right interior walls — keep interior neutral (light)
+// interior walls
 const leftWall = makePlane(ROOM.depth, ROOM.height, 0xffffff);
 leftWall.rotation.y = Math.PI / 2; leftWall.position.x = -ROOM.width / 2; leftWall.position.y = ROOM.height / 2; scene.add(leftWall);
 
@@ -112,7 +112,7 @@ if (typeof loader.setCrossOrigin === 'function') {
 }
 loader.crossOrigin = 'anonymous';
 
-// --- Frame creation (same as before) ---
+// --- Frame creation (same as commit) ---
 function createFrame({
   x = 0, y = 1.6, z = -ROOM.depth / 2 + 0.01,
   openingWidth = 3.2, openingHeight = 1.8,
@@ -212,7 +212,7 @@ createFrame({ x: 0, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openin
 createFrame({ x: 4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, title: 'Art 2', rotationY: 0 });
 createFrame({ x: -4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, openingHeight: 1.8, title: 'Art 1', rotationY: 0 });
 
-// --- Portraits on left wall (unchanged logic) ---
+// --- Portraits on left wall ---
 const portraitCount = PORTRAIT_FILES.length;
 if (portraitCount > 0) {
   const padding = 0.6;
@@ -351,14 +351,14 @@ function onPointerDown(event) {
 }
 window.addEventListener('pointerdown', onPointerDown);
 
-// --- RIGHT wall: create a decorative WebGL frame using createFrame() and embed Adobe PDF viewer ---
+// --- RIGHT wall: create a decorative WebGL frame using createFrame() and embed a PDF.js preview ---
 // Capture the returned thumb mesh so we can align the CSS3D object to its group
 const RIGHT_FRAME_W = 3.2;
 const RIGHT_FRAME_H = 2.0;
 const RIGHT_FRAME_DEPTH = 0.06;
 
 const rightFrameThumb = createFrame({
-  x: ROOM.width / 2 - (RIGHT_FRAME_DEPTH / 2 + 0.02), // flush with interior right wall
+  x: ROOM.width / 2 - (RIGHT_FRAME_DEPTH / 2 + 0.02),
   y: ROOM.height / 2,
   z: 0,
   openingWidth: RIGHT_FRAME_W,
@@ -372,70 +372,138 @@ const rightFrameThumb = createFrame({
 
 const rightFrameGroup = rightFrameThumb && rightFrameThumb.userData && rightFrameThumb.userData._group ? rightFrameThumb.userData._group : null;
 
-// PDF URL to display
-const PDF_URL = 'https://sherryz1999.github.io/museum/CatFoodDrive.pdf';
+// PDF preview pixel size
+const IFRAME_PX_W = 94;
+const IFRAME_PX_H = 100;
 
-// If the frame exists, create a CSS3D iframe using Adobe's public viewer page
-if (rightFrameGroup) {
-  // Use Adobe Document Cloud viewer wrapper page (file param = PDF URL).
-  // If this doesn't work due to Adobe restrictions, the code falls back to linking directly.
-  const adobeViewerSrc = 'https://documentcloud.adobe.com/view-sdk/viewer.html?file=' + encodeURIComponent(PDF_URL);
-
-  const IFRAME_PX_W = 94;
-  const IFRAME_PX_H = 100;
-
-  const pdfContainer = document.createElement('div');
-  pdfContainer.style.width = IFRAME_PX_W + 'px';
-  pdfContainer.style.height = IFRAME_PX_H + 'px';
-  pdfContainer.style.overflow = 'hidden';
-  pdfContainer.style.border = '0';
-  pdfContainer.style.boxSizing = 'border-box';
-  pdfContainer.style.pointerEvents = 'auto'; // allow interaction
-  pdfContainer.style.background = '#fff';
-  pdfContainer.style.borderRadius = '3px';
-  pdfContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.16)';
-
-  const pdfIframe = document.createElement('iframe');
-  pdfIframe.src = adobeViewerSrc;
-  pdfIframe.frameBorder = '0';
-  pdfIframe.width = String(IFRAME_PX_W);
-  pdfIframe.height = String(IFRAME_PX_H);
-  pdfIframe.allowFullscreen = true;
-  pdfIframe.style.display = 'block';
-  pdfIframe.style.width = '100%';
-  pdfIframe.style.height = '100%';
-  pdfIframe.style.border = '0';
-  // If Adobe blocks embedding, clicking the container will open the PDF in a new tab as fallback.
-  pdfContainer.addEventListener('click', (e) => {
-    // only open fallback if iframe fails to load; user can still interact with iframe otherwise
-    // (This fallback is conservative — it won't prevent normal iframe interaction.)
-    if (!pdfIframe.contentWindow || pdfIframe.contentWindow.length === 0) {
-      window.open(PDF_URL, '_blank', 'noopener');
-    }
-  }, { passive: true });
-
-  pdfContainer.appendChild(pdfIframe);
-
-  const pdfCssObj = new CSS3DObject(pdfContainer);
-
-  // Align CSS3D object to the WebGL frame group (position & rotation)
-  pdfCssObj.position.copy(rightFrameGroup.position);
-  pdfCssObj.rotation.copy(rightFrameGroup.rotation);
-
-  // Nudge slightly forward along the frame surface normal so it sits in front
-  const normal = new THREE.Vector3(1, 0, 0).applyQuaternion(rightFrameGroup.quaternion);
-  pdfCssObj.position.add(normal.multiplyScalar(0.02));
-
-  cssScene.add(pdfCssObj);
-
-  // Pointer handling: enable CSS3D root pointer events while hovering the container
-  pdfContainer.addEventListener('pointerenter', () => {
-    cssRenderer.domElement.style.pointerEvents = 'auto';
-  });
-  pdfContainer.addEventListener('pointerleave', () => {
-    cssRenderer.domElement.style.pointerEvents = 'none';
+// Helper: dynamically load PDF.js from CDN (pdfjs-dist)
+function loadPdfJs(version = '3.9.179') {
+  return new Promise((resolve, reject) => {
+    if (window.pdfjsLib) return resolve(window.pdfjsLib);
+    const script = document.createElement('script');
+    script.src = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/build/pdf.min.js`;
+    script.onload = () => {
+      // set worker
+      if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/build/pdf.worker.min.js`;
+        resolve(window.pdfjsLib);
+      } else {
+        reject(new Error('pdfjsLib not available after load'));
+      }
+    };
+    script.onerror = (e) => reject(new Error('Failed to load pdf.js: ' + e.message));
+    document.head.appendChild(script);
   });
 }
+
+// Create preview and render first page using PDF.js
+async function createPdfPreview(pdfUrl, widthPx, heightPx) {
+  // container element for CSS3D
+  const container = document.createElement('div');
+  container.style.width = widthPx + 'px';
+  container.style.height = heightPx + 'px';
+  container.style.boxSizing = 'border-box';
+  container.style.pointerEvents = 'auto';
+  container.style.background = '#fff';
+  container.style.borderRadius = '3px';
+  container.style.overflow = 'hidden';
+  container.style.display = 'flex';
+  container.style.alignItems = 'center';
+  container.style.justifyContent = 'center';
+  container.style.padding = '2px';
+
+  // canvas for PDF rendering
+  const canvas = document.createElement('canvas');
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
+  canvas.style.display = 'block';
+  canvas.style.background = '#fff';
+  container.appendChild(canvas);
+
+  // simple loading indicator
+  const loading = document.createElement('div');
+  loading.innerText = 'Loading...';
+  loading.style.position = 'absolute';
+  loading.style.fontSize = '12px';
+  loading.style.color = '#444';
+  loading.style.pointerEvents = 'none';
+  container.appendChild(loading);
+
+  // click to open full PDF
+  container.addEventListener('click', (e) => {
+    window.open(pdfUrl, '_blank', 'noopener');
+  });
+
+  try {
+    const pdfjs = await loadPdfJs();
+    const loadingTask = pdfjs.getDocument({ url: pdfUrl, withCredentials: false });
+    const pdf = await loadingTask.promise;
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 1 });
+
+    // compute scale to fit canvas element size (taking devicePixelRatio into account)
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const targetW = widthPx * dpr;
+    const targetH = heightPx * dpr;
+    const scale = Math.min(targetW / viewport.width, targetH / viewport.height);
+    const scaledViewport = page.getViewport({ scale });
+
+    // set canvas size in device pixels, style in CSS pixels
+    const ctx = canvas.getContext('2d', { alpha: false });
+    canvas.width = Math.round(scaledViewport.width);
+    canvas.height = Math.round(scaledViewport.height);
+    canvas.style.width = Math.round(scaledViewport.width / dpr) + 'px';
+    canvas.style.height = Math.round(scaledViewport.height / dpr) + 'px';
+
+    const renderContext = {
+      canvasContext: ctx,
+      viewport: scaledViewport
+    };
+    await page.render(renderContext).promise;
+
+    // remove loading
+    if (loading.parentNode) loading.parentNode.removeChild(loading);
+  } catch (err) {
+    // show fallback link text
+    container.innerHTML = '';
+    const a = document.createElement('a');
+    a.href = pdfUrl;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.innerText = 'Open PDF';
+    a.style.display = 'inline-block';
+    a.style.padding = '8px 10px';
+    a.style.background = '#eee';
+    a.style.borderRadius = '4px';
+    a.style.color = '#111';
+    container.appendChild(a);
+    console.error('PDF preview failed:', err);
+  }
+
+  return container;
+}
+
+// Create and attach CSS3D preview aligned to frame
+(async () => {
+  if (!rightFrameGroup) return;
+
+  const previewEl = await createPdfPreview(PDF_URL, IFRAME_PX_W, IFRAME_PX_H);
+  const cssObj = new CSS3DObject(previewEl);
+
+  // align with WebGL frame group
+  cssObj.position.copy(rightFrameGroup.position);
+  cssObj.rotation.copy(rightFrameGroup.rotation);
+
+  // nudge outward along frame normal so it sits in front of the frame
+  const normal = new THREE.Vector3(1, 0, 0).applyQuaternion(rightFrameGroup.quaternion);
+  cssObj.position.add(normal.multiplyScalar(0.02));
+
+  cssScene.add(cssObj);
+
+  // pointer control while hovering preview
+  previewEl.addEventListener('pointerenter', () => { cssRenderer.domElement.style.pointerEvents = 'auto'; });
+  previewEl.addEventListener('pointerleave', () => { cssRenderer.domElement.style.pointerEvents = 'none'; });
+})();
 
 // --- Modal & center frame video functions (unchanged) ---
 const modal = document.getElementById('video-modal');
@@ -457,7 +525,7 @@ function onResize() {
 window.addEventListener('resize', onResize);
 onResize();
 
-// --- Animation loop (render both scenes) ---
+// --- Animation loop ---
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
@@ -466,7 +534,7 @@ function animate() {
   const current = doorGroup.rotation.y;
   const diff = doorTargetRotation - current;
   if (Math.abs(diff) > 0.0005) {
-    doorGroup.rotation.y += diff * 0.18; // easing
+    doorGroup.rotation.y += diff * 0.18;
   } else {
     doorGroup.rotation.y = doorTargetRotation;
   }
@@ -485,4 +553,4 @@ function animate() {
 animate();
 
 // --- Helpful logs ---
-console.log('Replaced Google Slides embed with Adobe PDF viewer (Adobe viewer wrapper) showing:', PDF_URL);
+console.log('PDF.js preview set up for', PDF_URL, ' — click the preview to open the full PDF.');
