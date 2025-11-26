@@ -411,6 +411,7 @@ slideCssObj.position.copy(rightBacking.position);
 slideCssObj.rotation.copy(rightBacking.rotation);
 // nudge slightly forward so it is visible above the backing
 slideCssObj.position.x += 0.01;
+console.log(slideCssObj.position.x);
 cssScene.add(slideCssObj);
 
 // Allow pointer events for the iframe area: enable on its DOM container
@@ -470,7 +471,4 @@ function animate() {
 animate();
 
 // --- Helpful logs ---
-console.log(slideCssObj.position.x);
-console.log(slideCssObj.position.y);
-console.log(slideCssObj.position.z);
 console.log('Embedded Google Slides iframe into the WebGL right-wall frame (94x100 px).');
