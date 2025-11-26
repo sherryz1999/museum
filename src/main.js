@@ -284,7 +284,7 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const popup = document.createElement('div');
 popup.id = 'desc-popup';
-Object.assign(popup.style, { position: 'fixed', pointerEvents: 'none', background: 'rgba(0,0,0,0.78)', color: '#fff', padding: '8px 10px', borderRadius: '6px', fontFamily: 'system-ui, Arial, sans[...]
+Object.assign(popup.style, { position: 'fixed', pointerEvents: 'none', background: 'rgba(0,0,0,0.78)', color: '#fff', padding: '8px 10px', borderRadius: '6px', fontFamily: 'system-ui, Arial, sans-serif', fontSize: '13px', maxWidth: '320px', display: 'none', zIndex: '1000', boxShadow: '0 6px 18px rgba(0,0,0,0.35)' });
 document.body.appendChild(popup);
 function showPopup(text, clientX, clientY) { popup.innerText = text || ''; const left = Math.min(window.innerWidth - 340, clientX + 14); const top = Math.min(window.innerHeight - 80, clientY + 14); popup.style.left = left + 'px'; popup.style.top = top + 'px'; popup.style.display = 'block'; }
 function hidePopup() { popup.style.display = 'none'; }
@@ -345,7 +345,7 @@ const frameDepth = 0.06;
 createFrame({
   x: ROOM.width / 2 - (frameDepth / 2 + 0.02), // match previous backing offset
   y: ROOM.height / 2,
-  z: 0,
+  z: -ROOM.depth / 2 ,
   openingWidth: RIGHT_FRAME_W,
   openingHeight: RIGHT_FRAME_H,
   frameDepth: frameDepth,
