@@ -372,7 +372,7 @@ const rightFrameGroup = rightFrameThumb && rightFrameThumb.userData && rightFram
 
 // Determine preview pixel size from frame world size so preview visually fits the frame.
 // You can tweak PIXELS_PER_UNIT to make the preview larger or smaller.
-const PIXELS_PER_UNIT = 100; // 100 pixels per world unit
+const PIXELS_PER_UNIT = 1000; // 100 pixels per world unit
 const IFRAME_PX_W = Math.max(48, Math.round(RIGHT_FRAME_W * PIXELS_PER_UNIT)); // minimum to avoid too-small
 const IFRAME_PX_H = Math.max(48, Math.round(RIGHT_FRAME_H * PIXELS_PER_UNIT));
 
