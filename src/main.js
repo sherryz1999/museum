@@ -208,7 +208,7 @@ createFrame({ x: -4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, ope
 createFrame({
   x: -3.8, // left of center on back wall
   y: 1.6,
-  z: -ROOM.depth / 2 + 0.06,
+  z: ROOM.depth / 2 - 0.06,
   openingWidth: 2.4,    // landscape orientation
   openingHeight: 1.4,
   frameDepth: 0.06,
@@ -223,7 +223,7 @@ createFrame({
 createFrame({
   x: 3.8, // right of center on back wall
   y: 1.6,
-  z: -ROOM.depth / 2 + 0.06,
+  z: ROOM.depth / 2 - 0.06,
   openingWidth: 2.4,
   openingHeight: 1.4,
   frameDepth: 0.06,
