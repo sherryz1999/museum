@@ -517,7 +517,7 @@ function animate() {
   // gentle float
   const t = performance.now() * 0.0002;
   scene.traverse((o) => {
-    if (o.userData && (o.userData.type === 'video-frame' || o.userData.type === 'portrait' || o.userData.type === 'pdf-preview')) {
+    if (o.userData && (o.userData.type === 'video-frame' || o.userData.type === 'portrait' || o.userData.type === 'back-picture' || o.userData.type === 'pdf-preview')) {
       o.rotation.z = Math.sin(t + (o.position.x || 0)) * 0.002;
     }
   });
