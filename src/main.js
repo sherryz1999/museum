@@ -1,10 +1,11 @@
 // src/main.js
 // Museum scene — Emerald exterior theme, portraits, door.
-// Base: commit 07aada0
-// Change: Fixed the two back-wall landscape frames so they appear on the back wall and face into the room.
-// - Corrected z position to be on the back wall (negative z).
-// - Ensured the frames face into the room (rotationY = Math.PI).
-// No other changes were made.
+// Base: commit 2d1c151. PDF preview rendered into a WebGL texture and applied to right-wall frame.
+// Change: added two landscape pictures on the back wall (left and right of center).
+//
+// Pictures added:
+// 1) https://sherryz1999.github.io/museum/IMG_3401.JPG  (left side of back wall)
+// 2) https://sherryz1999.github.io/museum/IMG_34012.JPG (right side of back wall)
 
 import * as THREE from 'https://unpkg.com/three@0.159.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.159.0/examples/jsm/controls/OrbitControls.js';
@@ -207,7 +208,7 @@ createFrame({ x: -4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, ope
 createFrame({
   x: -3.8, // left of center on back wall
   y: 1.6,
-  z: -ROOM.depth / 2 + 0.06,
+  z: ROOM.depth / 2 - 0.06,
   openingWidth: 2.4,    // landscape orientation
   openingHeight: 1.4,
   frameDepth: 0.06,
@@ -222,7 +223,7 @@ createFrame({
 createFrame({
   x: 3.8, // right of center on back wall
   y: 1.6,
-  z: -ROOM.depth / 2 + 0.06,
+  z: ROOM.depth / 2 - 0.06,
   openingWidth: 2.4,
   openingHeight: 1.4,
   frameDepth: 0.06,
@@ -292,7 +293,7 @@ const doorMesh = new THREE.Mesh(doorGeo, doorMat);
 doorMesh.position.set(DOOR_WIDTH / 2, 0, -DOOR_DEPTH / 2); doorMesh.castShadow = true; doorMesh.receiveShadow = true; doorMesh.userData = { type: 'door' }; doorGroup.add(doorMesh);
 
 const knob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 12), new THREE.MeshStandardMaterial({ color: 0xcccc99 }));
-knob.position.set(DOOR_WIDTH - 0.22, 0, 0.03); doorMesh.add(knob);
+knob.position.set(DOOR_WIDTH/2 - 0.2, 0, 0.03); doorMesh.add(knob);
 
 let doorOpen = false; let doorTargetRotation = 0; const DOOR_OPEN_ANGLE = -Math.PI / 2 + 0.05;
 function toggleDoor() { doorOpen = !doorOpen; doorTargetRotation = doorOpen ? DOOR_OPEN_ANGLE : 0; }
@@ -321,9 +322,9 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const popup = document.createElement('div');
 popup.id = 'desc-popup';
-Object.assign(popup.style, { position: 'fixed', pointerEvents: 'none', background: 'rgba(0,0,0,0.78)', color: '#fff', padding: '8px 10px', borderRadius: '6px', fontFamily: 'system-ui, Arial, sans[...]
+Object.assign(popup.style, { position: 'fixed', pointerEvents: 'none', background: 'rgba(0,0,0,0.78)', color: '#fff', padding: '8px 10px', borderRadius: '6px', fontFamily: 'system-ui, Arial, sans-serif', fontSize: '13px', maxWidth: '320px', display: 'none', zIndex: '1000', boxShadow: '0 6px 18px rgba(0,0,0,0.35)' });
 document.body.appendChild(popup);
-function showPopup(text, clientX, clientY) { popup.innerText = text || ''; const left = Math.min(window.innerWidth - 340, clientX + 14); const top = Math.min(window.innerHeight - 80, clientY + 14[...]
+function showPopup(text, clientX, clientY) { popup.innerText = text || ''; const left = Math.min(window.innerWidth - 340, clientX + 14); const top = Math.min(window.innerHeight - 80, clientY + 14); popup.style.left = left + 'px'; popup.style.top = top + 'px'; popup.style.display = 'block'; }
 function hidePopup() { popup.style.display = 'none'; }
 
 function onPointerMove(event) {
@@ -370,6 +371,12 @@ function onPointerDown(event) {
     }
     if (obj.userData && obj.userData.type === 'pdf-preview' && obj.userData.pdfUrl) {
       window.open(obj.userData.pdfUrl, '_blank', 'noopener');
+      return;
+    }
+    // new: click on back-picture opens the image modal (enlarge)
+    if (obj.userData && obj.userData.type === 'back-picture') {
+      const src = obj.userData.imageUrl || '';
+      openImageModal(src, obj.userData.filename || '');
       return;
     }
     if (obj.userData && obj.userData.type === 'door') {
@@ -484,7 +491,7 @@ if (rightFrameThumb) {
 const modal = document.getElementById('video-modal');
 const ytIframe = document.getElementById('yt-iframe');
 const closeBtn = document.getElementById('close-btn');
-function openVideoModal(videoId) { if (ytIframe && modal) { ytIframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`; modal.setAttribute('aria-hidden', 'false'); document.body.s[...]
+function openVideoModal(videoId) { if (ytIframe && modal) { ytIframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`; modal.setAttribute('aria-hidden', 'false'); document.body.style.overflow = 'hidden'; } else { window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank', 'noopener'); } }
 function closeVideoModal() { if (ytIframe && modal) { ytIframe.src = ''; modal.setAttribute('aria-hidden', 'true'); document.body.style.overflow = ''; } }
 if (closeBtn) closeBtn.addEventListener('click', closeVideoModal);
 if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeVideoModal(); });
