@@ -336,7 +336,7 @@ function onPointerMove(event) {
   let found = false;
   for (const it of intersects) {
     const obj = it.object;
-    if (obj.userData && obj.userData.type === 'portrait') {
+    if (obj.userData && obj.userData.type === 'portrait'|| obj.userData.type === 'back-picture') {
       const filename = obj.userData.filename;
       const desc = PORTRAIT_DESCRIPTIONS[filename] || obj.userData.description || 'No description';
       showPopup(desc, event.clientX, event.clientY);
