@@ -205,7 +205,7 @@ createFrame({ x: -4.2, y: 1.6, z: -ROOM.depth / 2 + 0.06, openingWidth: 3.2, ope
 
 // --- NEW: two landscape pictures on the back wall (left and right of center) ---
 // Left landscape image (to the left side of the back wall)
-createFrame({
+const backLeft = createFrame({
   x: -3.8, // left of center on back wall
   y: 1.6,
   z: ROOM.depth / 2 - 0.06,
@@ -225,7 +225,7 @@ if (backLeft) {
 }
 
 // Right landscape image (to the right side of the back wall)
-createFrame({
+const backRight = createFrame({
   x: 3.8, // right of center on back wall
   y: 1.6,
   z: ROOM.depth / 2 - 0.06,
