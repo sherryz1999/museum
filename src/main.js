@@ -218,6 +218,11 @@ createFrame({
   imageUrl: 'https://sherryz1999.github.io/museum/IMG_3401.JPG',
   title: 'Back Left - Landscape'
 });
+if (backLeft) {
+  backLeft.userData.type = 'back-picture';
+  backLeft.userData.description = 'Back wall — left landscape';
+  backLeft.userData.filename = 'IMG_3401.JPG';
+}
 
 // Right landscape image (to the right side of the back wall)
 createFrame({
@@ -233,6 +238,11 @@ createFrame({
   imageUrl: 'https://sherryz1999.github.io/museum/IMG_34012.JPG',
   title: 'Back Right - Landscape'
 });
+if (backRight) {
+  backRight.userData.type = 'back-picture';
+  backRight.userData.description = 'Back wall — right landscape';
+  backRight.userData.filename = 'IMG_34012.JPG';
+}
 
 // --- Portraits on left wall ---
 const portraitCount = PORTRAIT_FILES.length;
@@ -336,7 +346,7 @@ function onPointerMove(event) {
   let found = false;
   for (const it of intersects) {
     const obj = it.object;
-    if (obj.userData && obj.userData.type === 'portrait'|| obj.userData.type === 'back-picture') {
+    if (obj.userData && (obj.userData.type === 'portrait'|| obj.userData.type === 'back-picture')) {
       const filename = obj.userData.filename;
       const desc = PORTRAIT_DESCRIPTIONS[filename] || obj.userData.description || 'No description';
       showPopup(desc, event.clientX, event.clientY);
