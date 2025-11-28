@@ -96,7 +96,7 @@ backWall.position.z = -ROOM.depth / 2; backWall.position.y = ROOM.height / 2; sc
 
 // --- Exterior strip (outside of back wall) ---
 // Create a light green strip positioned just outside the back wall. This does NOT change any interior colors.
-(function addExteriorStrip() {
+(function addBackExteriorStrip() {
   // strip height (world units) — small band near the top of the exterior wall
   const STRIP_HEIGHT = 0.4;
   const STRIP_Y = ROOM.height - STRIP_HEIGHT / 2 - 0.08; // slightly below roofline
@@ -112,6 +112,25 @@ backWall.position.z = -ROOM.depth / 2; backWall.position.y = ROOM.height / 2; sc
   exteriorStrip.receiveShadow = false;
   exteriorStrip.castShadow = false;
   exteriorStrip.name = 'exterior-strip-back';
+  scene.add(exteriorStrip);
+})();
+
+(function addFrontExteriorStrip() {
+  // strip height (world units) — small band near the top of the exterior wall
+  const STRIP_HEIGHT = 0.4;
+  const STRIP_Y = ROOM.height/2 - STRIP_HEIGHT / 2 - 0.08; // slightly below roofline
+  // place slightly outside (behind) the back wall
+  const STRIP_Z = ROOM.depth / 2 + 0.02;
+
+  const stripGeo = new THREE.PlaneGeometry(ROOM.width + 0.02, STRIP_HEIGHT);
+  const stripMat = new THREE.MeshStandardMaterial({ color: EXTERIOR_STRIP_LIGHT_GREEN, side: THREE.DoubleSide, roughness: 0.6 });
+  const exteriorStrip = new THREE.Mesh(stripGeo, stripMat);
+  exteriorStrip.position.set(0, STRIP_Y, STRIP_Z);
+  // face outward (away from interior) so it's visible from the exterior side
+  exteriorStrip.rotation.y = 0;
+  exteriorStrip.receiveShadow = false;
+  exteriorStrip.castShadow = false;
+  exteriorStrip.name = 'exterior-strip-front';
   scene.add(exteriorStrip);
 })();
 
