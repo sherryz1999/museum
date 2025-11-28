@@ -118,9 +118,9 @@ backWall.position.z = -ROOM.depth / 2; backWall.position.y = ROOM.height / 2; sc
 (function addFrontExteriorStrip() {
   // strip height (world units) — small band near the top of the exterior wall
   const STRIP_HEIGHT = 0.4;
-  const STRIP_Y = ROOM.height/2 - STRIP_HEIGHT / 2 - 0.08; // slightly below roofline
+  const STRIP_Y = ROOM.height/2 + STRIP_HEIGHT; // slightly below roofline
   // place slightly outside (behind) the back wall
-  const STRIP_Z = ROOM.depth / 2 + 0.02;
+  const STRIP_Z = ROOM.depth / 2 + 0.01;
 
   const stripGeo = new THREE.PlaneGeometry(ROOM.width + 0.02, STRIP_HEIGHT);
   const stripMat = new THREE.MeshStandardMaterial({ color: EXTERIOR_STRIP_LIGHT_GREEN, side: THREE.DoubleSide, roughness: 0.6 });
