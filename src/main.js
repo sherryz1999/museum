@@ -77,6 +77,7 @@ const EMERALD_PRIMARY = 0x0f6b58;
 const EMERALD_ACCENT = 0x7fcfb1;
 const OUTSIDE_TRIM = 0x734b2b;
 const DOOR_SILVER = 0xB8B8B8; // silver metal grey for door
+const DOOR_FRAME_SILVER = 0xD8D8D8; // lighter silver metal for door frame (for contrast)
 
 // Light green for exterior strip (sampled / approximated from provided reference image)
 const EXTERIOR_STRIP_LIGHT_GREEN = 0xCDEEDB; // pale mint/sea-green — only used outside the museum
@@ -329,7 +330,7 @@ frontRight.position.set(ROOM.width / 2 - rightSegW / 2, wallH / 2, ROOM.depth / 
 frontRight.rotation.y = Math.PI; scene.add(frontRight);
 
 const doorFrameThickness = 0.06;
-const doorFrameMat = new THREE.MeshStandardMaterial({ color: OUTSIDE_TRIM, roughness: 0.6 });
+const doorFrameMat = new THREE.MeshStandardMaterial({ color: DOOR_FRAME_SILVER, roughness: 0.4, metalness: 0.5 });
 const frameGroup = new THREE.Group();
 const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(doorFrameThickness, DOOR_HEIGHT + 0.02, DOOR_DEPTH + 0.01), doorFrameMat);
 frameLeft.position.set(-DOOR_WIDTH / 2 - doorFrameThickness / 2, 0, 0);
