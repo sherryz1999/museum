@@ -76,6 +76,7 @@ scene.add(fill);
 const EMERALD_PRIMARY = 0x0f6b58;
 const EMERALD_ACCENT = 0x7fcfb1;
 const OUTSIDE_TRIM = 0x734b2b;
+const DOOR_SILVER = 0xB8B8B8; // silver metal grey for door
 
 // Light green for exterior strip (sampled / approximated from provided reference image)
 const EXTERIOR_STRIP_LIGHT_GREEN = 0xCDEEDB; // pale mint/sea-green — only used outside the museum
@@ -342,7 +343,7 @@ const doorGroup = new THREE.Group();
 doorGroup.position.set(-DOOR_WIDTH / 2, DOOR_HEIGHT / 2, ROOM.depth / 2 + 0.005); doorGroup.rotation.y = 0; scene.add(doorGroup);
 
 const doorGeo = new THREE.BoxGeometry(DOOR_WIDTH, DOOR_HEIGHT, DOOR_DEPTH);
-const doorMat = new THREE.MeshStandardMaterial({ color: OUTSIDE_TRIM, roughness: 0.5 });
+const doorMat = new THREE.MeshStandardMaterial({ color: DOOR_SILVER, roughness: 0.3, metalness: 0.6 });
 const doorMesh = new THREE.Mesh(doorGeo, doorMat);
 doorMesh.position.set(DOOR_WIDTH / 2, 0, -DOOR_DEPTH / 2); doorMesh.castShadow = true; doorMesh.receiveShadow = true; doorMesh.userData = { type: 'door' }; doorGroup.add(doorMesh);
 
