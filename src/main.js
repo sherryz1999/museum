@@ -329,7 +329,7 @@ frontRight.position.set(ROOM.width / 2 - rightSegW / 2, wallH / 2, ROOM.depth / 
 frontRight.rotation.y = Math.PI; scene.add(frontRight);
 
 const doorFrameThickness = 0.06;
-const doorFrameMat = new THREE.MeshStandardMaterial({ color: OUTSIDE_TRIM, roughness: 0.6 });
+const doorFrameMat = new THREE.MeshStandardMaterial({ color: 0xD8D8D8, roughness: 0.4, metalness: 0.5 }); // lighter silver metal for contrast
 const frameGroup = new THREE.Group();
 const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(doorFrameThickness, DOOR_HEIGHT + 0.02, DOOR_DEPTH + 0.01), doorFrameMat);
 frameLeft.position.set(-DOOR_WIDTH / 2 - doorFrameThickness / 2, 0, 0);
